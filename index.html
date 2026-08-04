@@ -3,9 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="theme-color" content="#fff7f6" />
+  <meta name="theme-color" content="#faf8ff" />
   <title>知期 · 经期记录原型</title>
   <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="v2.css" />
 </head>
 <body>
   <main class="phone" aria-label="知期经期记录应用原型">
@@ -22,11 +23,12 @@
   <dialog id="recordDialog" class="sheet">
     <form method="dialog" id="recordForm">
       <header><button value="cancel" class="text-button">取消</button><h2>记录今天</h2><button value="save" class="text-button strong">保存</button></header>
-      <div class="date-focus"><span>8月4日</span><small>周期第 18 天</small></div>
+      <div class="date-focus"><span id="recordDate">今天</span><small id="recordCycleDay">当前周期</small></div>
       <fieldset><legend>今天来经期了吗？</legend><div class="choice-row"><label><input type="radio" name="period" value="no" checked><span>没有</span></label><label><input type="radio" name="period" value="yes"><span>来了</span></label></div></fieldset>
-      <fieldset><legend>身体感受</legend><div class="chips"><label><input type="checkbox"><span>轻松</span></label><label><input type="checkbox"><span>腹痛</span></label><label><input type="checkbox"><span>腰酸</span></label><label><input type="checkbox"><span>头痛</span></label><label><input type="checkbox"><span>疲惫</span></label></div></fieldset>
-      <fieldset><legend>心情</legend><div class="moods"><label><input type="radio" name="mood"><span>🙂<small>平静</small></span></label><label><input type="radio" name="mood"><span>😊<small>愉快</small></span></label><label><input type="radio" name="mood"><span>😔<small>低落</small></span></label><label><input type="radio" name="mood"><span>😣<small>烦躁</small></span></label></div></fieldset>
-      <label class="note"><span>备注</span><textarea placeholder="写下一些想记住的事…"></textarea></label>
+      <fieldset><legend>经量</legend><div class="choice-row"><label><input type="radio" name="flow" value="light"><span>少量</span></label><label><input type="radio" name="flow" value="medium"><span>适中</span></label><label><input type="radio" name="flow" value="heavy"><span>较多</span></label></div></fieldset>
+      <fieldset><legend>身体感受</legend><div class="chips"><label><input type="checkbox" name="symptoms" value="轻松"><span>轻松</span></label><label><input type="checkbox" name="symptoms" value="腹痛"><span>腹痛</span></label><label><input type="checkbox" name="symptoms" value="腰酸"><span>腰酸</span></label><label><input type="checkbox" name="symptoms" value="头痛"><span>头痛</span></label><label><input type="checkbox" name="symptoms" value="疲惫"><span>疲惫</span></label></div></fieldset>
+      <fieldset><legend>心情</legend><div class="moods"><label><input type="radio" name="mood" value="平静"><span>🙂<small>平静</small></span></label><label><input type="radio" name="mood" value="愉快"><span>😊<small>愉快</small></span></label><label><input type="radio" name="mood" value="低落"><span>😔<small>低落</small></span></label><label><input type="radio" name="mood" value="烦躁"><span>😣<small>烦躁</small></span></label></div></fieldset>
+      <label class="note"><span>备注</span><textarea name="note" placeholder="写下一些想记住的事…"></textarea></label>
     </form>
   </dialog>
   <div id="toast" role="status">今天的记录已保存</div>

@@ -1,0 +1,43 @@
+.day {
+  border: 0;
+  background: transparent;
+  font-family: inherit;
+}
+
+.month button.predicted {
+  border: 1.5px dashed var(--accent);
+  background: transparent;
+}
+
+.month button.period.predicted {
+  background: #e6dcf7;
+}
+
+.stats {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.stat small {
+  margin-left: 2px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.row[data-action="reset"] .row-icon {
+  color: #806b9d;
+}
+
+.choice-row label {
+  min-width: 0;
+}
+
+.choice-row span {
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}
