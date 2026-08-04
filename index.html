@@ -26,7 +26,7 @@
       <div class="date-focus"><span id="recordDate">今天</span><small id="recordCycleDay">当前周期</small></div>
       <fieldset><legend>今天来经期了吗？</legend><div class="choice-row"><label><input type="radio" name="period" value="no" checked><span>没有</span></label><label><input type="radio" name="period" value="yes"><span>来了</span></label></div></fieldset>
       <fieldset id="flowFieldset"><legend>经量</legend><div class="choice-row"><label><input type="radio" name="flow" value="light"><span>少量</span></label><label><input type="radio" name="flow" value="medium"><span>适中</span></label><label><input type="radio" name="flow" value="heavy"><span>较多</span></label></div></fieldset>
-      <fieldset class="product-fieldset"><legend>卫生用品</legend><p class="field-help">记录这一天实际使用的数量</p><div class="product-counters">
+      <fieldset class="product-fieldset"><legend>月经用品</legend><p class="field-help">记录这一天实际使用的数量</p><div class="product-counters">
         <div class="product-counter-wrap"><div class="product-counter"><div><b>月经巾</b><small>每日合计 · 张</small></div><div class="stepper"><button type="button" data-counter="pads" data-step="-1" aria-label="减少一张月经巾">−</button><input type="number" name="pads" value="0" min="0" max="50" inputmode="numeric" aria-label="月经巾使用张数"><button type="button" data-counter="pads" data-step="1" aria-label="增加一张月经巾">＋</button></div></div><div class="time-entry"><input id="padsTimeInput" type="time" aria-label="月经巾更换时间"><button type="button" data-add-time="pads">添加更换时间</button></div><div id="padsTimeList" class="time-list"></div></div>
         <div class="product-counter-wrap"><div class="product-counter"><div><b>月经棉条</b><small>每日合计 · 支</small></div><div class="stepper"><button type="button" data-counter="tampons" data-step="-1" aria-label="减少一支月经棉条">−</button><input type="number" name="tampons" value="0" min="0" max="50" inputmode="numeric" aria-label="月经棉条使用支数"><button type="button" data-counter="tampons" data-step="1" aria-label="增加一支月经棉条">＋</button></div></div><div class="time-entry"><input id="tamponsTimeInput" type="time" aria-label="月经棉条更换时间"><button type="button" data-add-time="tampons">添加更换时间</button></div><div id="tamponsTimeList" class="time-list"></div></div>
       </div></fieldset>
@@ -53,8 +53,21 @@
     <div class="backup-icon">⇩</div><h2>确认导入</h2>
     <p id="importFileName" class="backup-subtle"></p>
     <div id="importSummary" class="import-summary"></div>
-    <p class="privacy-note">文件只在当前设备中读取，不会上传到网络。苹果 PDF 仅读取经期摘要，不读取姓名、生日。现有记录将保留，相同日期以导入内容更新。</p>
+    <div class="import-mode" role="group" aria-label="导入方式"><label><input type="radio" name="importMode" value="merge" checked><span>合并</span><small>保留当前记录，补充新数据</small></label><label><input type="radio" name="importMode" value="overwrite"><span>覆盖</span><small>相同日期以导入文件为准</small></label></div>
+    <p class="privacy-note">文件只在当前设备中读取，不会上传到网络。导入前会自动保存一份可撤销快照。</p>
     <button id="confirmImport" class="backup-primary">确认导入</button>
+  </dialog>
+  <dialog id="cycleSettingsDialog" class="backup-dialog settings-dialog">
+    <button class="dialog-close" id="closeCycleSettings" aria-label="关闭">×</button>
+    <div class="backup-icon">⌁</div><h2>周期设置</h2>
+    <p class="backup-subtle">调整预测基准，不会删除历史记录</p>
+    <form id="cycleSettingsForm">
+      <label class="settings-field">最近一次经期开始日<input id="lastPeriodStartInput" name="lastPeriodStart" type="date" required></label>
+      <div class="settings-grid"><label class="settings-field">典型周期<input name="cycleLength" type="number" min="15" max="90" required><small>天</small></label><label class="settings-field">平均经期<input name="periodLength" type="number" min="1" max="15" required><small>天</small></label></div>
+      <div class="cycle-list-head"><b>每次周期长度</b><small>取消勾选可排除异常周期</small></div>
+      <div id="cycleIntervalList" class="cycle-interval-list"></div>
+      <button class="backup-primary" type="submit">保存周期设置</button>
+    </form>
   </dialog>
   <dialog id="exportDialog" class="backup-dialog">
     <button class="dialog-close" id="closeExport" aria-label="关闭">×</button>

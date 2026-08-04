@@ -12,6 +12,8 @@ const importDialog = document.querySelector('#importDialog');
 const exportDialog = document.querySelector('#exportDialog');
 const importSummary = document.querySelector('#importSummary');
 const importFileName = document.querySelector('#importFileName');
+const cycleSettingsDialog = document.querySelector('#cycleSettingsDialog');
+const cycleSettingsForm = document.querySelector('#cycleSettingsForm');
 let pendingImport = null;
 let trendLimit = 6;
 let formUsageTimes = { pads: [], tampons: [] };
@@ -34,8 +36,9 @@ let batchMode = false;
 let batchDates = [];
 let recordTargets = [selectedDate];
 let records = load(STORE_KEY, {});
-const defaultSettings = () => ({ cycleLength: 28, periodLength: 5, lastPeriodStart: offsetKey(todayDate, -17), reminder: true });
+const defaultSettings = () => ({ cycleLength: 28, periodLength: 5, lastPeriodStart: offsetKey(todayDate, -17), reminder: true, excludedCycles: [] });
 let settings = load(SETTINGS_KEY, defaultSettings());
+settings = { ...defaultSettings(), ...settings, excludedCycles: Array.isArray(settings.excludedCycles) ? settings.excludedCycles : [] };
 
 function load(key, fallback) {
   try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; }
@@ -109,6 +112,19 @@ function nextPeriodDate() {
   while (next <= todayDate) next.setDate(next.getDate() + settings.cycleLength);
   return toKey(next);
 }
+function predictionWindow() {
+  const metrics = cycleMetrics();
+  const usable = metrics.includedIntervals.slice(-6);
+  const irregular = usable.length >= 3 && Math.max(...usable) - Math.min(...usable) >= 7;
+  if (!irregular) { const key = nextPeriodDate(); return { start: key, end: key, irregular: false }; }
+  const anchor = fromKey(settings.lastPeriodStart);
+  let start = offsetKey(anchor, Math.min(...usable)), end = offsetKey(anchor, Math.max(...usable));
+  while (fromKey(end) <= todayDate) { start = offsetKey(fromKey(start), settings.cycleLength); end = offsetKey(fromKey(end), settings.cycleLength); }
+  return { start, end, irregular: true };
+}
+function formatPredictionWindow(window) {
+  return window.irregular ? `${cnDate(fromKey(window.start))}–${cnDate(fromKey(window.end))}` : cnDate(fromKey(window.start));
+}
 function relativeDays(key) { return daysBetween(toKey(todayDate), key); }
 function phaseInfo(key) {
   const day = cycleDay(key);
@@ -149,6 +165,7 @@ function today() {
   const todayKey = toKey(todayDate);
   const record = records[todayKey];
   const next = nextPeriodDate();
+  const nextWindow = predictionWindow();
   const daysToNext = relativeDays(next);
   const phase = phaseInfo(todayKey);
   const symptomText = record?.symptoms?.length ? record.symptoms.join('、') : '尚未记录';
@@ -161,8 +178,8 @@ function today() {
     ${phaseTrack(phase.id)}
     <div class="quick-period"><div><b>今天月经来了吗？</b><small>${record?.period ? '已记录，可随时修改' : '一秒完成快速记录'}</small></div><div class="quick-actions"><button data-action="quick-period" data-value="yes" class="${record?.period === 'yes' ? 'active' : ''}">来了</button><button data-action="quick-period" data-value="no" class="${record?.period === 'no' ? 'active' : ''}">没有</button></div></div>
     <button class="primary" data-action="record" data-date="${todayKey}">${record ? '补充详细记录' : '记录更多感受'}</button>
-    <p class="prediction">预计下次经期 <b>${cnDate(fromKey(next))}</b></p>
-    <h2 class="section-title">今日记录</h2><div class="list">${row('♡', '症状与感受', symptomText, 'record')}${row('◔', '经期记录', periodText, 'record')}${row('▤', '卫生用品', productText, 'record')}${row('⌁', '周期趋势', `平均周期 ${settings.cycleLength} 天`, 'trends')}</div>`;
+    <p class="prediction">${nextWindow.irregular ? '周期波动较大，预计下次经期范围' : '预计下次经期'} <b>${formatPredictionWindow(nextWindow)}</b></p>
+    <h2 class="section-title">今日记录</h2><div class="list">${row('♡', '症状与感受', symptomText, 'record')}${row('◔', '经期记录', periodText, 'record')}${row('▤', '月经用品', productText, 'record')}${row('⌁', '周期趋势', `平均周期 ${settings.cycleLength} 天`, 'trends')}</div>`;
 }
 
 function calendar() {
@@ -202,10 +219,10 @@ function trends() {
   const maxFrequency = topFrequency[0]?.[1] || 1;
   const totalPads = Object.values(records).reduce((sum, record) => sum + safeCount(record.pads), 0);
   const totalTampons = Object.values(records).reduce((sum, record) => sum + safeCount(record.tampons), 0);
-  const cycleSeed = metrics.intervals.length ? metrics.intervals.slice(-trendLimit) : [settings.cycleLength - 1, settings.cycleLength + 1, settings.cycleLength, settings.cycleLength - 2, settings.cycleLength + 2, settings.cycleLength];
+  const cycleSeed = metrics.includedIntervals.length ? metrics.includedIntervals.slice(-trendLimit) : [settings.cycleLength - 1, settings.cycleLength + 1, settings.cycleLength, settings.cycleLength - 2, settings.cycleLength + 2, settings.cycleLength];
   const minCycle = Math.min(...cycleSeed), maxCycle = Math.max(...cycleSeed);
   const heights = cycleSeed.map(value => maxCycle === minCycle ? 72 : Math.round(52 + ((value - minCycle) / (maxCycle - minCycle)) * 40));
-  const chartLabels = metrics.starts.slice(1).slice(-trendLimit).map(key => `${fromKey(key).getMonth() + 1}月`);
+  const chartLabels = metrics.intervalDetails.filter(item => !(settings.excludedCycles || []).includes(item.end)).slice(-trendLimit).map(item => `${fromKey(item.end).getMonth() + 1}月`);
   const phaseIds = ['period-phase', 'follicular', 'early-luteal', 'late-luteal'];
   const phaseNames = { 'period-phase': '经期', follicular: '卵泡期', 'early-luteal': '黄体前期', 'late-luteal': '黄体后期' };
   const phaseSummary = phaseIds.map(id => {
@@ -228,7 +245,7 @@ function trends() {
   const monthlyRows = monthlyEntries.map(([month, value]) => `<div class="monthly-row"><b>${Number(month.slice(5))}月</b><div><i class="pads-bar" style="width:${Math.round(value.pads / monthlyMax * 100)}%"></i><small>月经巾 ${value.pads}</small></div><div><i class="tampons-bar" style="width:${Math.round(value.tampons / monthlyMax * 100)}%"></i><small>棉条 ${value.tampons}</small></div></div>`).join('');
   return `<h1 class="page-title">周期趋势</h1><div class="subtle">根据已记录的经期开始日自动计算</div>
     <div class="stats"><div class="stat"><strong>${metrics.averageCycle}<small>天</small></strong><span>平均周期</span></div><div class="stat"><strong>${metrics.averagePeriod}<small>天</small></strong><span>平均经期</span></div><div class="stat"><strong>${periodRecords.length}<small>天</small></strong><span>已记录经期</span></div><div class="stat"><strong>${Object.keys(records).length}<small>天</small></strong><span>记录总数</span></div></div>
-    <div class="calculation-note"><b>典型周期 ${metrics.typicalCycle} 天</b><span>预测采用中位数；平均周期采用 ${metrics.intervals.length} 个完整周期的算术平均。</span></div>
+    <div class="calculation-note"><b>典型周期 ${metrics.typicalCycle} 天</b><span>预测采用中位数；平均周期采用 ${metrics.includedIntervals.length} 个未排除周期的算术平均。</span></div>
     <div class="trend-heading"><h2 class="section-title">真实周期长度</h2><div class="trend-toggle"><button data-trend-limit="6" class="${trendLimit === 6 ? 'active' : ''}">最近6次</button><button data-trend-limit="12" class="${trendLimit === 12 ? 'active' : ''}">最近12次</button></div></div>
     <div class="chart">${heights.map((h, i) => `<div class="bar ${i === heights.length - 1 ? 'active' : ''}" style="height:${h}%" data-label="${chartLabels[i] || '本次'}" data-value="${cycleSeed[i]}天"></div>`).join('')}</div>
     <h2 class="section-title">症状与情绪频率</h2><div class="frequency-list">${topFrequency.length ? topFrequency.map(([name, count]) => `<div><span><b>${name}</b><small>${count} 次</small></span><i><em style="width:${Math.round(count / maxFrequency * 100)}%"></em></i></div>`).join('') : '<p class="empty-state">记录症状和心情后，这里会显示出现频率。</p>'}</div>
@@ -241,8 +258,10 @@ function profile() {
   const lastSaved = localStorage.getItem(BACKUP_META_KEY);
   const savedLabel = lastSaved ? new Date(lastSaved).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '等待首次记录';
   return `<h1 class="page-title">我的</h1><div class="subtle">数据只属于你</div>
-    <div class="profile-card"><h3>双重本地保护</h3><p class="subtle">${Object.keys(records).length ? `已有 ${Object.keys(records).length} 天记录同时保存在主存储与自动快照。` : '记录将在当前设备进行双重保存，不需要注册账号。'}</p><span class="save-status">● 上次自动保存：${savedLabel}</span></div>
-    <div class="list">${row('⌁','提醒设置', settings.reminder ? '经期前 2 天提醒' : '提醒已关闭','toggle-reminder')}${row('⇩','导入备份','支持知期 JSON、苹果健康 PDF/XML','import')}${row('⇧','导出与保存','Markdown、PDF 或 JSON','export')}${row('↺','恢复演示数据','清除记录并恢复默认','reset')}${row('?','关于预测','了解计算方式与限制','about')}</div>
+    <div class="profile-card"><h3>双重本地保护</h3><p class="subtle">${Object.keys(records).length ? `已有 ${Object.keys(records).length} 天记录同时保存在主存储与自动快照。` : '记录将在当前设备进行双重保存，不需要注册账号。'}</p><span class="save-status">● 上次自动保存：${savedLabel}</span><p class="backup-reminder">建议每月下载一次 JSON 完整备份，换手机或清理浏览器后仍可恢复。</p><button class="mini-backup" data-action="export-json">下载 JSON 完整备份</button></div>
+    <h2 class="section-title profile-section">周期设置</h2><div class="list">${row('◷','调整周期', `${settings.lastPeriodStart} · 典型 ${settings.cycleLength} 天 · 经期 ${settings.periodLength} 天`,'cycle-settings')}</div>
+    <h2 class="section-title profile-section">数据管理</h2><div class="list">${row('⇩','导入备份','导入前预览新增、覆盖与冲突','import')}${row('↺','恢复自动快照','恢复最近一次自动保存的数据','restore-snapshot')}${row('↶','撤销最近一次导入','恢复到导入前的状态','undo-import')}${row('⇧','导出与保存','Markdown、PDF 或 JSON','export')}</div>
+    <h2 class="section-title profile-section">其他</h2><div class="list">${row('⌁','提醒设置', settings.reminder ? '经期前 2 天提醒' : '提醒已关闭','toggle-reminder')}${row('↺','恢复演示数据','清除记录并恢复默认','reset')}${row('?','关于预测','了解计算方式与限制','about')}</div>
     <div class="insight"><p class="subtle">阶段和日期均为估算，不能用于避孕、诊断或替代专业医疗建议。</p></div>`;
 }
 
@@ -271,20 +290,35 @@ function periodRange(key) {
 function cycleMetrics() {
   const periodKeys = Object.keys(records).filter(key => records[key]?.period === 'yes').sort();
   const starts = periodKeys.filter(key => records[offsetKey(fromKey(key), -1)]?.period !== 'yes');
-  const intervals = starts.slice(1).map((key, index) => daysBetween(starts[index], key)).filter(days => days >= 15 && days <= 90);
+  const intervalDetails = starts.slice(1).map((key, index) => ({ start: starts[index], end: key, days: daysBetween(starts[index], key) })).filter(item => item.days >= 15 && item.days <= 90);
+  const excluded = new Set(settings.excludedCycles || []);
+  const includedDetails = intervalDetails.filter(item => !excluded.has(item.end));
+  const intervals = intervalDetails.map(item => item.days);
+  const includedIntervals = includedDetails.map(item => item.days);
   const periodRuns = starts.map(start => {
     let length = 0, cursor = start;
     while (records[cursor]?.period === 'yes' && length < 15) { length++; cursor = offsetKey(fromKey(cursor), 1); }
     return length;
   }).filter(Boolean);
   const average = values => values.length ? Math.round(values.reduce((sum, value) => sum + value, 0) / values.length) : 0;
-  const sorted = [...intervals].sort((a, b) => a - b);
+  const sorted = [...includedIntervals].sort((a, b) => a - b);
   const middle = Math.floor(sorted.length / 2);
   const median = sorted.length ? (sorted.length % 2 ? sorted[middle] : Math.round((sorted[middle - 1] + sorted[middle]) / 2)) : 0;
-  return { starts, intervals, periodRuns, averageCycle: average(intervals) || settings.cycleLength, typicalCycle: median || settings.cycleLength, averagePeriod: average(periodRuns) || settings.periodLength };
+  return { starts, intervals, includedIntervals, intervalDetails, periodRuns, averageCycle: average(includedIntervals) || settings.cycleLength, typicalCycle: median || settings.cycleLength, averagePeriod: average(periodRuns) || settings.periodLength };
+}
+
+function openCycleSettings() {
+  const metrics = cycleMetrics();
+  cycleSettingsForm.elements.lastPeriodStart.value = settings.lastPeriodStart;
+  cycleSettingsForm.elements.cycleLength.value = settings.cycleLength;
+  cycleSettingsForm.elements.periodLength.value = settings.periodLength;
+  const excluded = new Set(settings.excludedCycles || []);
+  document.querySelector('#cycleIntervalList').innerHTML = metrics.intervalDetails.length ? metrics.intervalDetails.slice().reverse().map(item => `<label><span><b>${item.days} 天</b><small>${item.start} → ${item.end}</small></span><input type="checkbox" name="includedCycle" value="${item.end}" ${excluded.has(item.end) ? '' : 'checked'}></label>`).join('') : '<p class="empty-state">至少记录两次经期后，这里会显示周期长度。</p>';
+  cycleSettingsDialog.showModal();
 }
 
 function syncCycleSettingsFromHistory() {
+  if (settings.cycleManual) return;
   if (!Object.values(records).some(record => String(record?.importedFrom || '').startsWith('Apple Health'))) return;
   const metrics = cycleMetrics();
   if (metrics.intervals.length >= 2) settings.cycleLength = metrics.typicalCycle;
@@ -515,7 +549,11 @@ async function prepareImport(file) {
     if (!keys.length) throw new Error('文件中没有可导入的记录');
     const displayName = lowerName.endsWith('.pdf') ? '苹果健康经期历史 PDF' : file.name;
     importFileName.textContent = `${displayName} · ${pendingImport.source}`;
-    importSummary.innerHTML = `<div><strong>${keys.length}</strong><span>识别记录天数</span></div><p>${keys[0]} 至 ${keys.at(-1)}</p>`;
+    const added = keys.filter(key => !records[key]).length;
+    const existing = keys.filter(key => records[key]);
+    const conflicts = existing.filter(key => JSON.stringify(records[key]) !== JSON.stringify(pendingImport.records[key])).length;
+    pendingImport.stats = { added, overwritten: existing.length - conflicts, conflicts };
+    importSummary.innerHTML = `<div class="import-counts"><span><strong>${added}</strong><small>新增</small></span><span><strong>${existing.length - conflicts}</strong><small>覆盖</small></span><span><strong>${conflicts}</strong><small>冲突</small></span></div><p>共 ${keys.length} 天 · ${keys[0]} 至 ${keys.at(-1)}</p>`;
     importDialog.showModal();
   } catch (error) {
     pendingImport = null;
@@ -526,15 +564,24 @@ async function prepareImport(file) {
 function applyImport() {
   if (!pendingImport) return;
   saveDurableSnapshot('before-import', { records, settings, savedAt: new Date().toISOString(), version: 2 });
-  records = { ...records, ...pendingImport.records };
+  const mode = document.querySelector('input[name="importMode"]:checked')?.value || 'merge';
+  if (mode === 'overwrite') records = { ...records, ...pendingImport.records };
+  else Object.entries(pendingImport.records).forEach(([key, incoming]) => { records[key] = records[key] ? { ...incoming, ...records[key] } : incoming; });
   if (pendingImport.settings && typeof pendingImport.settings === 'object') settings = { ...settings, ...pendingImport.settings };
   const periodKeys = Object.keys(pendingImport.records).filter(key => pendingImport.records[key]?.period === 'yes' && key <= toKey(todayDate)).sort();
   if (periodKeys.length) settings.lastPeriodStart = periodKeys.at(-1);
   const importedMetrics = cycleMetrics();
-  if (importedMetrics.intervals.length >= 2) settings.cycleLength = importedMetrics.typicalCycle;
-  if (importedMetrics.periodRuns.length) settings.periodLength = importedMetrics.averagePeriod;
+  if (!settings.cycleManual && importedMetrics.includedIntervals.length >= 2) settings.cycleLength = importedMetrics.typicalCycle;
+  if (!settings.cycleManual && importedMetrics.periodRuns.length) settings.periodLength = importedMetrics.averagePeriod;
   const count = Object.keys(pendingImport.records).length;
-  persist(); pendingImport = null; importDialog.close(); render('profile'); showToast(`已导入 ${count} 天记录`);
+  persist(); pendingImport = null; importDialog.close(); render('profile'); showToast(`已${mode === 'overwrite' ? '覆盖' : '合并'}导入 ${count} 天记录`);
+}
+
+async function restoreSnapshot(id, label) {
+  const snapshot = await readDurableSnapshot(id);
+  if (!snapshot?.records || !confirm(`确定${label}吗？当前未备份的修改会被替换。`)) return;
+  records = snapshot.records; settings = { ...defaultSettings(), ...(snapshot.settings || {}) };
+  persist(); render('profile'); showToast(`${label}完成`);
 }
 
 screen.addEventListener('click', event => {
@@ -556,6 +603,10 @@ screen.addEventListener('click', event => {
   if (action === 'prev-month' || action === 'next-month') { calendarCursor.setMonth(calendarCursor.getMonth() + (action === 'next-month' ? 1 : -1)); render('calendar'); return; }
   if (action === 'toggle-reminder') { settings.reminder = !settings.reminder; persist(); render('profile'); showToast(settings.reminder ? '提醒已开启' : '提醒已关闭'); return; }
   if (action === 'import') return importFile.click();
+  if (action === 'cycle-settings') return openCycleSettings();
+  if (action === 'restore-snapshot') return restoreSnapshot('latest', '恢复自动快照');
+  if (action === 'undo-import') return restoreSnapshot('before-import', '撤销最近一次导入');
+  if (action === 'export-json') { exportData(); showToast('JSON 完整备份已下载'); return; }
   if (action === 'export') { exportDialog.showModal(); return; }
   if (action === 'reset' && confirm('确定清除当前设备上的所有记录吗？')) { records = {}; settings = defaultSettings(); batchMode = false; batchDates = []; persist(); render('profile'); showToast('记录与周期设置已恢复'); return; }
   if (action === 'about') return alert('阶段预测基于最近一次经期开始日与平均周期估算。实际排卵日和各阶段长度会波动，不能用于避孕、诊断或替代专业医疗建议。');
@@ -610,6 +661,25 @@ document.querySelector('#deletePeriod').addEventListener('click', () => {
 importFile.addEventListener('change', () => { const file = importFile.files?.[0]; if (file) prepareImport(file); });
 document.querySelector('#closeImport').addEventListener('click', () => { pendingImport = null; importDialog.close(); });
 document.querySelector('#confirmImport').addEventListener('click', applyImport);
+document.querySelector('#closeCycleSettings').addEventListener('click', () => cycleSettingsDialog.close());
+cycleSettingsForm.addEventListener('submit', event => {
+  event.preventDefault();
+  const previousStart = settings.lastPeriodStart;
+  const nextStart = cycleSettingsForm.elements.lastPeriodStart.value;
+  settings.cycleLength = Math.max(15, Math.min(90, Number(cycleSettingsForm.elements.cycleLength.value) || 28));
+  settings.periodLength = Math.max(1, Math.min(15, Number(cycleSettingsForm.elements.periodLength.value) || 5));
+  settings.cycleManual = true;
+  settings.lastPeriodStart = nextStart;
+  const included = new Set([...cycleSettingsForm.querySelectorAll('input[name="includedCycle"]:checked')].map(input => input.value));
+  settings.excludedCycles = cycleMetrics().intervalDetails.map(item => item.end).filter(end => !included.has(end));
+  if (nextStart !== previousStart) {
+    const oldRange = periodRange(previousStart);
+    oldRange.forEach(key => { if (records[key]) { records[key].period = 'no'; records[key].flow = ''; } });
+    const length = oldRange.length || settings.periodLength;
+    Array.from({ length }, (_, index) => offsetKey(fromKey(nextStart), index)).forEach(key => { records[key] = { ...(records[key] || {}), period: 'yes', flow: records[key]?.flow || '', symptoms: records[key]?.symptoms || [], mood: records[key]?.mood || '', note: records[key]?.note || '', updatedAt: new Date().toISOString() }; });
+  }
+  persist(); cycleSettingsDialog.close(); render('profile'); showToast('周期设置已保存');
+});
 document.querySelector('#closeExport').addEventListener('click', () => exportDialog.close());
 exportDialog.addEventListener('click', event => {
   const button = event.target.closest('[data-export-format]'); if (!button) return;
