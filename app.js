@@ -3,6 +3,9 @@ const tabs = [...document.querySelectorAll('.tab')];
 const dialog = document.querySelector('#recordDialog');
 const form = document.querySelector('#recordForm');
 const toast = document.querySelector('#toast');
+const noPeriodDialog = document.querySelector('#noPeriodDialog');
+const cancelNoPeriod = document.querySelector('#cancelNoPeriod');
+const confirmNoPeriod = document.querySelector('#confirmNoPeriod');
 
 const STORE_KEY = 'zhiqi-records-v2';
 const SETTINGS_KEY = 'zhiqi-settings-v2';
@@ -66,18 +69,20 @@ function showToast(message) {
 const row = (icon, title, desc, action = '') => `<button class="row" ${action ? `data-action="${action}"` : ''}><span class="row-icon">${icon}</span><span class="row-copy"><b>${title}</b><small>${desc}</small></span><span class="chev">›</span></button>`;
 
 function weekStrip() {
-  const mondayOffset = (todayDate.getDay() + 6) % 7;
-  return `<div class="week">${Array.from({ length: 7 }, (_, i) => {
-    const date = new Date(todayDate); date.setDate(todayDate.getDate() - mondayOffset + i);
-    return `<button class="day ${toKey(date) === toKey(todayDate) ? 'current' : ''}" data-date="${toKey(date)}">${'日一二三四五六'[date.getDay()]}<b>${date.getDate()}</b></button>`;
+  return `<div class="week" aria-label="可左右滑动选择日期">${Array.from({ length: 21 }, (_, i) => {
+    const date = new Date(todayDate); date.setDate(todayDate.getDate() - 10 + i);
+    const isToday = toKey(date) === toKey(todayDate);
+    return `<button class="day ${isToday ? 'current' : ''}" data-date="${toKey(date)}" ${isToday ? 'data-today="true"' : ''}>${'日一二三四五六'[date.getDay()]}<b>${date.getDate()}</b></button>`;
   }).join('')}</div>`;
 }
 
+const phaseShape = id => `<i class="phase-shape ${id}" aria-hidden="true"></i>`;
+
 function phaseTrack(active) {
   return `<div class="phase-track" aria-label="预计周期阶段">
-    <span class="${active === 'follicular' ? 'active' : ''}"><i></i>卵泡期</span>
-    <span class="${active === 'early-luteal' ? 'active' : ''}"><i></i>黄体前期</span>
-    <span class="${active === 'late-luteal' ? 'active' : ''}"><i></i>黄体后期</span>
+    <span class="${active === 'follicular' ? 'active' : ''}">${phaseShape('follicular')}卵泡期</span>
+    <span class="${active === 'early-luteal' ? 'active' : ''}">${phaseShape('early-luteal')}黄体前期</span>
+    <span class="${active === 'late-luteal' ? 'active' : ''}">${phaseShape('late-luteal')}黄体后期</span>
   </div>`;
 }
 
@@ -92,7 +97,7 @@ function today() {
   return `<div class="topline"><div><h1>今天</h1><div class="date">${cnDate(todayDate, true)}</div></div><button class="privacy" aria-label="隐私模式" data-action="privacy">◉</button></div>
     ${weekStrip()}
     <div class="cycle"><div class="cycle-content"><small>预计${phase.name}</small><strong>第 ${cycleDay(todayKey)} 天</strong><span>${daysToNext >= 0 ? `预计 ${daysToNext} 天后` : '请更新经期日期'}</span></div></div>
-    <div class="phase-card"><div><span class="phase-dot ${phase.id}"></span><div><b>预计${phase.name}</b><small>${phase.detail}</small></div></div><small class="estimate">仅为估算</small></div>
+    <div class="phase-card"><div>${phaseShape(phase.id)}<div><b>预计${phase.name}</b><small>${phase.detail}</small></div></div><small class="estimate">仅为估算</small></div>
     ${phaseTrack(phase.id)}
     <div class="quick-period"><div><b>今天月经来了吗？</b><small>${record?.period ? '已记录，可随时修改' : '一秒完成快速记录'}</small></div><div class="quick-actions"><button data-action="quick-period" data-value="yes" class="${record?.period === 'yes' ? 'active' : ''}">来了</button><button data-action="quick-period" data-value="no" class="${record?.period === 'no' ? 'active' : ''}">没有</button></div></div>
     <button class="primary" data-action="record" data-date="${todayKey}">${record ? '补充详细记录' : '记录更多感受'}</button>
@@ -120,7 +125,7 @@ function calendar() {
   return `<div class="calendar-title"><div><h1 class="page-title">日历</h1><div class="subtle">${batchMode ? '点击多个日期进行批量记录' : '查看阶段预测或补充记录'}</div></div><button class="multi-toggle ${batchMode ? 'active' : ''}" data-action="toggle-batch">${batchMode ? '取消多选' : '多选日期'}</button></div>
     <div class="calendar-head"><button data-action="prev-month" aria-label="上个月">‹</button><b>${year}年${month + 1}月</b><button data-action="next-month" aria-label="下个月">›</button></div>
     <div class="month"><span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span>${cells.join('')}</div>
-    <div class="legend"><span><i class="dot"></i>已记录经期</span><span><i class="dot predict"></i>预测经期</span><span><i class="dot phase"></i>阶段预测</span></div>
+    <div class="phase-legend" aria-label="阶段图例"><span><i class="phase-shape period-phase"></i>经期</span><span><i class="predicted-ring"></i>预测经期</span><span>${phaseShape('follicular')}卵泡期</span><span>${phaseShape('early-luteal')}黄体前期</span><span>${phaseShape('late-luteal')}黄体后期</span></div>
     ${batchPanel}
     ${batchMode ? '' : `<div class="insight"><h3>${cnDate(fromKey(selectedDate))} · 预计${selectedPhase.name}</h3><p class="subtle">周期第 ${cycleDay(selectedDate)} 天 · ${summary}</p><button class="primary" data-action="record" data-date="${selectedDate}">${selectedRecord ? '编辑记录' : '补充记录'}</button></div>`}`;
 }
@@ -153,6 +158,11 @@ function render(page = activePage) {
   screen.innerHTML = pages[page]();
   tabs.forEach(tab => tab.classList.toggle('active', tab.dataset.page === page));
   screen.scrollTop = 0;
+  if (page === 'today') requestAnimationFrame(() => {
+    const rail = screen.querySelector('.week');
+    const current = rail?.querySelector('[data-today="true"]');
+    if (rail && current) rail.scrollLeft = current.offsetLeft - rail.clientWidth / 2 + current.clientWidth / 2;
+  });
 }
 
 function openRecord(dateKey, targets) {
@@ -196,6 +206,11 @@ function saveRecord() {
 }
 
 function quickPeriod(value) {
+  if (value === 'no') { noPeriodDialog.showModal(); return; }
+  commitQuickPeriod(value);
+}
+
+function commitQuickPeriod(value) {
   const key = toKey(todayDate);
   records[key] = { ...(records[key] || {}), period: value, flow: records[key]?.flow || '', symptoms: records[key]?.symptoms || [], mood: records[key]?.mood || '', note: records[key]?.note || '', updatedAt: new Date().toISOString() };
   if (value === 'yes') updateLastPeriodStart([key]);
@@ -235,4 +250,6 @@ screen.addEventListener('click', event => {
 
 tabs.forEach(tab => tab.addEventListener('click', () => { if (tab.dataset.page !== 'calendar') { batchMode = false; batchDates = []; } render(tab.dataset.page); }));
 dialog.addEventListener('close', () => { if (dialog.returnValue === 'save') saveRecord(); });
+cancelNoPeriod.addEventListener('click', () => noPeriodDialog.close());
+confirmNoPeriod.addEventListener('click', () => { noPeriodDialog.close(); commitQuickPeriod('no'); });
 render('today');

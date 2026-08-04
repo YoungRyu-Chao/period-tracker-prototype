@@ -31,6 +31,12 @@
       <label class="note"><span>备注</span><textarea name="note" placeholder="写下一些想记住的事…"></textarea></label>
     </form>
   </dialog>
+  <dialog id="noPeriodDialog" class="confirm-dialog">
+    <div class="confirm-icon">✓</div>
+    <h2>确认今天没有来吗？</h2>
+    <p>确认后会记录为“今天没有来”，之后仍可随时修改。</p>
+    <div class="confirm-actions"><button id="cancelNoPeriod">再想想</button><button id="confirmNoPeriod" class="confirm">确认没有来</button></div>
+  </dialog>
   <div id="toast" role="status">今天的记录已保存</div>
   <script src="app.js"></script>
 </body>

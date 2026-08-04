@@ -50,18 +50,35 @@
 .phase-card b, .quick-period b { display: block; font-size: 13px; }
 .phase-card small, .quick-period small { display: block; margin-top: 3px; color: var(--muted); font-size: 10px; }
 .phase-card .estimate { margin: 0; white-space: nowrap; }
-.phase-dot { width: 11px; height: 11px; border-radius: 50%; background: #b49bdf; }
-.phase-dot.early-luteal { background: #cfb2e4; }
-.phase-dot.late-luteal { background: #dfbad5; }
-.phase-dot.period-phase { background: var(--accent); }
+.week {
+  display: flex;
+  grid-template-columns: none;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  margin-left: -24px;
+  margin-right: -24px;
+  padding: 0 24px 4px;
+}
+.week::-webkit-scrollbar { display: none; }
+.week .day { flex: 0 0 44px; scroll-snap-align: center; }
+
+.phase-shape { display: inline-block; flex: 0 0 auto; width: 11px; height: 11px; background: #7558dd; }
+.phase-shape.follicular { transform: rotate(45deg); border-radius: 2px; background: #7558dd; }
+.phase-shape.early-luteal { width: 0; height: 0; background: transparent; border-left: 6px solid transparent; border-right: 6px solid transparent; border-bottom: 11px solid #d17b16; }
+.phase-shape.late-luteal { border-radius: 3px; background: #f2ad27; }
+.phase-shape.period-phase { border-radius: 50%; background: #ee83ae; }
 
 .phase-track { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 0 2px 14px; }
 .phase-track span { color: var(--muted); font-size: 9px; text-align: center; }
-.phase-track i { display: block; height: 4px; margin-bottom: 5px; border-radius: 3px; background: #e1d9ec; }
-.phase-track span:nth-child(2) i { background: #e4d4ef; }
-.phase-track span:nth-child(3) i { background: #edd9e8; }
-.phase-track span.active { color: var(--accent-dark); font-weight: 700; }
-.phase-track span.active i { height: 6px; margin-top: -1px; background: var(--accent); }
+.phase-track .phase-shape { display: block; margin: 0 auto 6px; }
+.phase-track span:nth-child(2) { color: #a76516; }
+.phase-track span:nth-child(3) { color: #b77a0c; }
+.phase-track span.active { color: var(--ink); font-weight: 800; }
+.phase-track span.active .phase-shape { filter: drop-shadow(0 3px 3px rgba(57,43,79,.22)); transform: scale(1.25) rotate(45deg); }
+.phase-track span.active .phase-shape.early-luteal { transform: scale(1.2); }
+.phase-track span.active .phase-shape.late-luteal { transform: scale(1.25); }
 
 .quick-period { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0 0 14px; }
 .quick-actions { display: flex; gap: 6px; }
@@ -84,18 +101,27 @@
   position: absolute;
   width: 4px;
   height: 4px;
-  border-radius: 50%;
+  border-radius: 1px;
   left: 50%;
   bottom: 3px;
   transform: translateX(-50%);
-  background: #b49bdf;
+  background: #7558dd;
+  transform: translateX(-50%) rotate(45deg);
 }
-.month button.phase-early-luteal:not(.period):not(.predicted)::after { background: #cfb2e4; }
-.month button.phase-late-luteal:not(.period):not(.predicted)::after { background: #dfbad5; }
+.month button.phase-follicular:not(.period):not(.predicted) { color: #6746ce; font-weight: 700; }
+.month button.phase-early-luteal:not(.period):not(.predicted) { color: #b9650e; font-weight: 700; }
+.month button.phase-early-luteal:not(.period):not(.predicted)::after { width: 0; height: 0; bottom: 2px; background: transparent; border-left: 3px solid transparent; border-right: 3px solid transparent; border-bottom: 5px solid #d17b16; border-radius: 0; transform: translateX(-50%); }
+.month button.phase-late-luteal:not(.period):not(.predicted) { color: #c17b00; font-weight: 700; }
+.month button.phase-late-luteal:not(.period):not(.predicted)::after { background: #f2ad27; border-radius: 1px; transform: translateX(-50%); }
+.month button.phase-period-phase:not(.period):not(.predicted)::after { background: #ee83ae; border-radius: 50%; transform: translateX(-50%); }
 .month button.batch-selected { background: var(--accent) !important; color: #fff !important; box-shadow: 0 5px 12px rgba(149, 117, 214, .25); }
 .month button.batch-selected::after { background: #fff !important; }
-.dot.phase { background: #b49bdf; }
-.legend { flex-wrap: wrap; row-gap: 7px; }
+.phase-legend { display: flex; gap: 15px; overflow-x: auto; scrollbar-width: none; margin: 18px 0; padding: 12px 13px; border-radius: 15px; background: rgba(255,255,255,.76); white-space: nowrap; }
+.phase-legend::-webkit-scrollbar { display: none; }
+.phase-legend span { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 10px; }
+.phase-legend .phase-shape { width: 8px; height: 8px; }
+.phase-legend .phase-shape.early-luteal { width: 0; height: 0; border-left-width: 4px; border-right-width: 4px; border-bottom-width: 8px; }
+.predicted-ring { width: 10px; height: 10px; border: 1.5px solid #ee83ae; border-radius: 50%; }
 
 .batch-panel {
   display: flex;
@@ -112,6 +138,15 @@
 .batch-panel span small { margin-top: 4px; color: var(--muted); font-size: 10px; }
 .batch-panel button { background: var(--accent); border-color: var(--accent); color: #fff; }
 .batch-panel button:disabled { opacity: .38; cursor: default; }
+
+.confirm-dialog { width: min(330px, calc(100% - 40px)); border: 0; border-radius: 26px; padding: 26px 22px 21px; background: var(--bg); color: var(--ink); text-align: center; box-shadow: var(--shadow); }
+.confirm-dialog::backdrop { background: rgba(47,35,67,.34); backdrop-filter: blur(3px); }
+.confirm-dialog .confirm-icon { width: 44px; height: 44px; margin: 0 auto 14px; display: grid; place-items: center; border-radius: 50%; background: var(--soft); color: var(--accent-dark); font-size: 20px; font-weight: 800; }
+.confirm-dialog h2 { margin: 0 0 8px; font-size: 19px; }
+.confirm-dialog p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.6; }
+.confirm-actions { display: grid; grid-template-columns: 1fr 1.35fr; gap: 8px; margin-top: 20px; }
+.confirm-actions button { height: 42px; border: 1px solid var(--line); border-radius: 14px; background: #fff; color: var(--muted); font-weight: 700; }
+.confirm-actions .confirm { border-color: var(--accent); background: var(--accent); color: #fff; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
