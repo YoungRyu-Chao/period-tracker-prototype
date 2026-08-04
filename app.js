@@ -12,6 +12,9 @@ const exportDialog = document.querySelector('#exportDialog');
 const importSummary = document.querySelector('#importSummary');
 const importFileName = document.querySelector('#importFileName');
 let pendingImport = null;
+const appScriptUrl = document.querySelector('script[src$="app.js"]')?.src;
+const assetBaseUrl = new URL('.', appScriptUrl || document.baseURI);
+const assetUrl = filename => new URL(filename, assetBaseUrl).href;
 
 const STORE_KEY = 'zhiqi-records-v2';
 const SETTINGS_KEY = 'zhiqi-settings-v2';
@@ -311,8 +314,8 @@ function applePdfRecord(key) {
 }
 
 async function parseAppleHealthPdf(file) {
-  const pdfjs = await import('./pdf.min.mjs');
-  pdfjs.GlobalWorkerOptions.workerSrc = './pdf.worker.min.mjs';
+  const pdfjs = await import(assetUrl('pdf.min.mjs'));
+  pdfjs.GlobalWorkerOptions.workerSrc = assetUrl('pdf.worker.min.mjs');
   const pdf = await pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
   if (pdf.numPages < 2) throw new Error('这不是苹果健康的经期历史 PDF');
   const pageTexts = [];
