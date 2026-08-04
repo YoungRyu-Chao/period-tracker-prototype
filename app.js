@@ -18,6 +18,9 @@ const assetUrl = filename => new URL(filename, assetBaseUrl).href;
 
 const STORE_KEY = 'zhiqi-records-v2';
 const SETTINGS_KEY = 'zhiqi-settings-v2';
+const BACKUP_META_KEY = 'zhiqi-backup-meta-v2';
+const DB_NAME = 'zhiqi-durable-backup';
+const DB_STORE = 'snapshots';
 const todayDate = new Date();
 todayDate.setHours(12, 0, 0, 0);
 let activePage = 'today';
@@ -36,6 +39,49 @@ function load(key, fallback) {
 function persist() {
   localStorage.setItem(STORE_KEY, JSON.stringify(records));
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+  const snapshot = { records, settings, savedAt: new Date().toISOString(), version: 2 };
+  localStorage.setItem(BACKUP_META_KEY, snapshot.savedAt);
+  saveDurableSnapshot('latest', snapshot);
+}
+function openBackupDb() {
+  return new Promise((resolve, reject) => {
+    if (!window.indexedDB) return reject(new Error('IndexedDB unavailable'));
+    const request = indexedDB.open(DB_NAME, 1);
+    request.onupgradeneeded = () => request.result.createObjectStore(DB_STORE);
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+async function saveDurableSnapshot(id, snapshot = { records, settings, savedAt: new Date().toISOString(), version: 2 }) {
+  try {
+    const db = await openBackupDb();
+    await new Promise((resolve, reject) => {
+      const transaction = db.transaction(DB_STORE, 'readwrite');
+      transaction.objectStore(DB_STORE).put(JSON.parse(JSON.stringify(snapshot)), id);
+      transaction.oncomplete = resolve; transaction.onerror = () => reject(transaction.error);
+    });
+    db.close();
+  } catch { /* 主存储仍可正常使用 */ }
+}
+async function readDurableSnapshot(id = 'latest') {
+  try {
+    const db = await openBackupDb();
+    const snapshot = await new Promise((resolve, reject) => {
+      const request = db.transaction(DB_STORE, 'readonly').objectStore(DB_STORE).get(id);
+      request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
+    });
+    db.close(); return snapshot;
+  } catch { return null; }
+}
+async function recoverIfNeeded() {
+  if (Object.keys(records).length) return false;
+  const snapshot = await readDurableSnapshot('latest');
+  if (!snapshot?.records || !Object.keys(snapshot.records).length) return false;
+  records = snapshot.records;
+  settings = { ...defaultSettings(), ...(snapshot.settings || {}) };
+  localStorage.setItem(STORE_KEY, JSON.stringify(records));
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+  return true;
 }
 function toKey(date) {
   const y = date.getFullYear();
@@ -142,23 +188,29 @@ function calendar() {
 
 function trends() {
   const periodRecords = Object.entries(records).filter(([, r]) => r.period === 'yes');
+  const metrics = cycleMetrics();
   const symptomCount = {};
   Object.values(records).forEach(r => (r.symptoms || []).forEach(s => symptomCount[s] = (symptomCount[s] || 0) + 1));
   const common = Object.entries(symptomCount).sort((a, b) => b[1] - a[1])[0]?.[0] || '暂无记录';
   const totalPads = Object.values(records).reduce((sum, record) => sum + safeCount(record.pads), 0);
   const totalTampons = Object.values(records).reduce((sum, record) => sum + safeCount(record.tampons), 0);
-  const cycleSeed = [settings.cycleLength - 1, settings.cycleLength + 1, settings.cycleLength, settings.cycleLength - 2, settings.cycleLength + 2, settings.cycleLength];
-  const heights = cycleSeed.map(v => Math.max(48, Math.min(96, 58 + (v - 24) * 5)));
-  return `<h1 class="page-title">周期趋势</h1><div class="subtle">记录越完整，趋势越准确</div>
-    <div class="stats"><div class="stat"><strong>${settings.cycleLength}<small>天</small></strong><span>平均周期</span></div><div class="stat"><strong>${settings.periodLength}<small>天</small></strong><span>平均经期</span></div><div class="stat"><strong>${periodRecords.length}<small>天</small></strong><span>已记录经期</span></div><div class="stat"><strong>${Object.keys(records).length}<small>天</small></strong><span>记录总数</span></div></div>
+  const cycleSeed = metrics.intervals.length ? metrics.intervals.slice(-6) : [settings.cycleLength - 1, settings.cycleLength + 1, settings.cycleLength, settings.cycleLength - 2, settings.cycleLength + 2, settings.cycleLength];
+  const minCycle = Math.min(...cycleSeed), maxCycle = Math.max(...cycleSeed);
+  const heights = cycleSeed.map(value => maxCycle === minCycle ? 72 : Math.round(52 + ((value - minCycle) / (maxCycle - minCycle)) * 40));
+  const chartLabels = metrics.starts.slice(1).slice(-6).map(key => `${fromKey(key).getMonth() + 1}月`);
+  return `<h1 class="page-title">周期趋势</h1><div class="subtle">根据已记录的经期开始日自动计算</div>
+    <div class="stats"><div class="stat"><strong>${metrics.averageCycle}<small>天</small></strong><span>平均周期</span></div><div class="stat"><strong>${metrics.averagePeriod}<small>天</small></strong><span>平均经期</span></div><div class="stat"><strong>${periodRecords.length}<small>天</small></strong><span>已记录经期</span></div><div class="stat"><strong>${Object.keys(records).length}<small>天</small></strong><span>记录总数</span></div></div>
+    <div class="calculation-note"><b>典型周期 ${metrics.typicalCycle} 天</b><span>预测采用中位数；平均周期采用 ${metrics.intervals.length} 个完整周期的算术平均。</span></div>
     <h2 class="section-title">用品使用</h2><div class="usage-stats"><div><span class="usage-icon">▤</span><p><b>${totalPads}<small> 张</small></b><span>月经巾累计</span></p></div><div><span class="usage-icon tampon">▯</span><p><b>${totalTampons}<small> 支</small></b><span>月经棉条累计</span></p></div></div>
-    <h2 class="section-title">周期长度</h2><div class="chart">${heights.map((h, i) => `<div class="bar ${i === 5 ? 'active' : ''}" style="height:${h}%" data-label="${['3月','4月','5月','6月','7月','本次'][i]}"></div>`).join('')}</div>
+    <h2 class="section-title">周期长度</h2><div class="chart">${heights.map((h, i) => `<div class="bar ${i === heights.length - 1 ? 'active' : ''}" style="height:${h}%" data-label="${chartLabels[i] || ['3月','4月','5月','6月','7月','本次'][i]}"></div>`).join('')}</div>
     <div class="insight"><h3>最常记录：${common}</h3><p class="subtle">最近周期预计波动在 2 天以内。预测仅供日常健康记录参考。</p></div>`;
 }
 
 function profile() {
+  const lastSaved = localStorage.getItem(BACKUP_META_KEY);
+  const savedLabel = lastSaved ? new Date(lastSaved).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '等待首次记录';
   return `<h1 class="page-title">我的</h1><div class="subtle">数据只属于你</div>
-    <div class="profile-card"><h3>本地隐私保护</h3><p class="subtle">${Object.keys(records).length ? `已有 ${Object.keys(records).length} 天记录保存在当前设备。` : '记录仅保存在当前设备，不需要注册账号。'}</p></div>
+    <div class="profile-card"><h3>双重本地保护</h3><p class="subtle">${Object.keys(records).length ? `已有 ${Object.keys(records).length} 天记录同时保存在主存储与自动快照。` : '记录将在当前设备进行双重保存，不需要注册账号。'}</p><span class="save-status">● 上次自动保存：${savedLabel}</span></div>
     <div class="list">${row('⌁','提醒设置', settings.reminder ? '经期前 2 天提醒' : '提醒已关闭','toggle-reminder')}${row('⇩','导入备份','支持知期 JSON、苹果健康 PDF/XML','import')}${row('⇧','导出与保存','Markdown、PDF 或 JSON','export')}${row('↺','恢复演示数据','清除记录并恢复默认','reset')}${row('?','关于预测','了解计算方式与限制','about')}</div>
     <div class="insight"><p class="subtle">阶段和日期均为估算，不能用于避孕、诊断或替代专业医疗建议。</p></div>`;
 }
@@ -169,6 +221,29 @@ function usageText(record, compact = false) {
   const pads = safeCount(record?.pads), tampons = safeCount(record?.tampons);
   if (!pads && !tampons) return compact ? '' : '尚未记录使用数量';
   return [`月经巾 ${pads} 张`, `棉条 ${tampons} 支`].filter((text, index) => index === 0 ? pads : tampons).join(' · ');
+}
+function cycleMetrics() {
+  const periodKeys = Object.keys(records).filter(key => records[key]?.period === 'yes').sort();
+  const starts = periodKeys.filter(key => records[offsetKey(fromKey(key), -1)]?.period !== 'yes');
+  const intervals = starts.slice(1).map((key, index) => daysBetween(starts[index], key)).filter(days => days >= 15 && days <= 90);
+  const periodRuns = starts.map(start => {
+    let length = 0, cursor = start;
+    while (records[cursor]?.period === 'yes' && length < 15) { length++; cursor = offsetKey(fromKey(cursor), 1); }
+    return length;
+  }).filter(Boolean);
+  const average = values => values.length ? Math.round(values.reduce((sum, value) => sum + value, 0) / values.length) : 0;
+  const sorted = [...intervals].sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  const median = sorted.length ? (sorted.length % 2 ? sorted[middle] : Math.round((sorted[middle - 1] + sorted[middle]) / 2)) : 0;
+  return { starts, intervals, periodRuns, averageCycle: average(intervals) || settings.cycleLength, typicalCycle: median || settings.cycleLength, averagePeriod: average(periodRuns) || settings.periodLength };
+}
+
+function syncCycleSettingsFromHistory() {
+  if (!Object.values(records).some(record => String(record?.importedFrom || '').startsWith('Apple Health'))) return;
+  const metrics = cycleMetrics();
+  if (metrics.intervals.length >= 2) settings.cycleLength = metrics.typicalCycle;
+  if (metrics.periodRuns.length) settings.periodLength = metrics.averagePeriod;
+  persist();
 }
 const pages = { today, calendar, trends, profile };
 
@@ -314,8 +389,9 @@ function applePdfRecord(key) {
 }
 
 async function parseAppleHealthPdf(file) {
-  const pdfjs = await import(assetUrl('pdf.min.mjs'));
-  pdfjs.GlobalWorkerOptions.workerSrc = assetUrl('pdf.worker.min.mjs');
+  const pdfjs = window.pdfjsLib;
+  if (!pdfjs) throw new Error('PDF 解析组件未加载，请确认 pdf.min.js 与 index.html 在同一文件夹');
+  pdfjs.GlobalWorkerOptions.workerSrc = assetUrl('pdf.worker.min.js');
   const pdf = await pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
   if (pdf.numPages < 2) throw new Error('这不是苹果健康的经期历史 PDF');
   const pageTexts = [];
@@ -390,10 +466,14 @@ async function prepareImport(file) {
 
 function applyImport() {
   if (!pendingImport) return;
+  saveDurableSnapshot('before-import', { records, settings, savedAt: new Date().toISOString(), version: 2 });
   records = { ...records, ...pendingImport.records };
   if (pendingImport.settings && typeof pendingImport.settings === 'object') settings = { ...settings, ...pendingImport.settings };
   const periodKeys = Object.keys(pendingImport.records).filter(key => pendingImport.records[key]?.period === 'yes' && key <= toKey(todayDate)).sort();
   if (periodKeys.length) settings.lastPeriodStart = periodKeys.at(-1);
+  const importedMetrics = cycleMetrics();
+  if (importedMetrics.intervals.length >= 2) settings.cycleLength = importedMetrics.typicalCycle;
+  if (importedMetrics.periodRuns.length) settings.periodLength = importedMetrics.averagePeriod;
   const count = Object.keys(pendingImport.records).length;
   persist(); pendingImport = null; importDialog.close(); render('profile'); showToast(`已导入 ${count} 天记录`);
 }
@@ -444,4 +524,11 @@ exportDialog.addEventListener('click', event => {
 });
 cancelNoPeriod.addEventListener('click', () => noPeriodDialog.close());
 confirmNoPeriod.addEventListener('click', () => { noPeriodDialog.close(); commitQuickPeriod('no'); });
-render('today');
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') persist(); });
+async function bootstrap() {
+  const recovered = await recoverIfNeeded();
+  syncCycleSettingsFromHistory();
+  render('today');
+  if (recovered) showToast('已从自动快照恢复记录');
+}
+bootstrap();
