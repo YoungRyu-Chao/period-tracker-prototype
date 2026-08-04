@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#fff7f6" />
+  <title>知期 · 经期记录原型</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="phone" aria-label="知期经期记录应用原型">
+    <div class="statusbar"><span>9:41</span><span>● ◒</span></div>
+    <section id="screen" class="screen"></section>
+    <nav class="tabbar" aria-label="主导航">
+      <button class="tab active" data-page="today" aria-label="今天"><span class="icon">⌂</span><span>今天</span></button>
+      <button class="tab" data-page="calendar" aria-label="日历"><span class="icon">▦</span><span>日历</span></button>
+      <button class="tab" data-page="trends" aria-label="趋势"><span class="icon">⌁</span><span>趋势</span></button>
+      <button class="tab" data-page="profile" aria-label="我的"><span class="icon">○</span><span>我的</span></button>
+    </nav>
+  </main>
+
+  <dialog id="recordDialog" class="sheet">
+    <form method="dialog" id="recordForm">
+      <header><button value="cancel" class="text-button">取消</button><h2>记录今天</h2><button value="save" class="text-button strong">保存</button></header>
+      <div class="date-focus"><span>8月4日</span><small>周期第 18 天</small></div>
+      <fieldset><legend>今天来经期了吗？</legend><div class="choice-row"><label><input type="radio" name="period" value="no" checked><span>没有</span></label><label><input type="radio" name="period" value="yes"><span>来了</span></label></div></fieldset>
+      <fieldset><legend>身体感受</legend><div class="chips"><label><input type="checkbox"><span>轻松</span></label><label><input type="checkbox"><span>腹痛</span></label><label><input type="checkbox"><span>腰酸</span></label><label><input type="checkbox"><span>头痛</span></label><label><input type="checkbox"><span>疲惫</span></label></div></fieldset>
+      <fieldset><legend>心情</legend><div class="moods"><label><input type="radio" name="mood"><span>🙂<small>平静</small></span></label><label><input type="radio" name="mood"><span>😊<small>愉快</small></span></label><label><input type="radio" name="mood"><span>😔<small>低落</small></span></label><label><input type="radio" name="mood"><span>😣<small>烦躁</small></span></label></div></fieldset>
+      <label class="note"><span>备注</span><textarea placeholder="写下一些想记住的事…"></textarea></label>
+    </form>
+  </dialog>
+  <div id="toast" role="status">今天的记录已保存</div>
+  <script src="app.js"></script>
+</body>
+</html>
