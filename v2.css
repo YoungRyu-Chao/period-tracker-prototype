@@ -179,6 +179,55 @@
 .privacy-note { margin-bottom: 16px; text-align: left; }
 .backup-primary { width: 100%; height: 44px; border: 0; border-radius: 16px; background: var(--accent); color: #fff; font-size: 13px; font-weight: 700; }
 
+.calculation-note { display: flex; align-items: center; justify-content: space-between; gap: 15px; margin: -3px 0 20px; padding: 13px 14px; border-radius: 16px; background: var(--soft); }
+.calculation-note b { flex: 0 0 auto; color: var(--accent-dark); font-size: 12px; }
+.calculation-note span { color: var(--muted); font-size: 9px; line-height: 1.45; text-align: right; }
+.save-status { display: block; margin-top: 11px; color: var(--accent-dark); font-size: 9px; }
+
+.product-counter-wrap { overflow: hidden; border: 1px solid var(--line); border-radius: 16px; background: #fff; }
+.product-counter-wrap .product-counter { border: 0; border-radius: 0; }
+.time-entry { display: grid; grid-template-columns: 92px 1fr; gap: 7px; padding: 0 11px 10px; }
+.time-entry input, .time-entry button { height: 34px; border: 1px solid var(--line); border-radius: 11px; background: var(--bg); color: var(--ink); font: inherit; font-size: 10px; }
+.time-entry button { color: var(--accent-dark); font-weight: 700; }
+.time-list { display: flex; flex-wrap: wrap; gap: 5px; padding: 0 11px 10px; }
+.time-list:empty { display: none; }
+.time-list button { border: 0; border-radius: 10px; padding: 6px 8px; background: var(--soft); color: var(--accent-dark); font-size: 10px; }
+.time-list button span { margin-left: 5px; color: var(--muted); }
+.record-actions { display: grid; gap: 7px; padding: 4px 22px 28px; }
+.record-actions button { min-height: 40px; border: 1px solid var(--line); border-radius: 14px; background: #fff; color: var(--accent-dark); font-size: 11px; font-weight: 700; }
+.record-actions button[hidden] { display: none; }
+#deleteRecord, #deletePeriod { color: #b35d76; }
+.quick-flow-options { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 18px; }
+.quick-flow-options button { height: 42px; border: 1px solid var(--line); border-radius: 14px; background: #fff; color: var(--ink); font-weight: 700; }
+.flow-cancel { width: 100%; margin-top: 9px; height: 38px; border: 0; background: transparent; color: var(--muted); }
+
+.trend-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.trend-toggle { display: flex; padding: 2px; border-radius: 11px; background: var(--soft); }
+.trend-toggle button { border: 0; border-radius: 9px; padding: 6px 8px; background: transparent; color: var(--muted); font-size: 9px; }
+.trend-toggle button.active { background: #fff; color: var(--accent-dark); font-weight: 700; }
+.bar::before { content: attr(data-value); position: absolute; top: -17px; left: 50%; transform: translateX(-50%); color: var(--ink); font-size: 8px; white-space: nowrap; }
+.frequency-list { display: grid; gap: 11px; padding: 16px; border-radius: 20px; background: #fff; }
+.frequency-list > div { display: grid; grid-template-columns: 92px 1fr; align-items: center; gap: 9px; }
+.frequency-list span { display: flex; justify-content: space-between; gap: 5px; }
+.frequency-list b { font-size: 11px; }
+.frequency-list small { color: var(--muted); font-size: 9px; }
+.frequency-list i { height: 7px; overflow: hidden; border-radius: 5px; background: var(--soft); }
+.frequency-list em { display: block; height: 100%; border-radius: 5px; background: var(--accent); }
+.phase-comparison { display: grid; gap: 8px; }
+.phase-insight { display: flex; align-items: center; gap: 13px; padding: 13px 15px; border-radius: 16px; background: #fff; }
+.phase-insight span { flex: 1; display: flex; align-items: center; justify-content: space-between; }
+.phase-insight b { font-size: 11px; }
+.phase-insight small { color: var(--muted); font-size: 9px; }
+.monthly-usage { display: grid; gap: 10px; margin-top: 10px; padding: 15px; border-radius: 20px; background: #fff; }
+.monthly-row { display: grid; grid-template-columns: 28px 1fr 1fr; gap: 8px; align-items: center; }
+.monthly-row > b { font-size: 10px; }
+.monthly-row > div { position: relative; height: 26px; overflow: hidden; border-radius: 8px; background: var(--bg); }
+.monthly-row i { display: block; height: 100%; min-width: 2px; opacity: .55; }
+.monthly-row .pads-bar { background: #e886ad; }
+.monthly-row .tampons-bar { background: var(--accent); }
+.monthly-row small { position: absolute; inset: 0; display: grid; place-items: center; color: var(--ink); font-size: 8px; }
+.empty-state { margin: 0; color: var(--muted); font-size: 10px; line-height: 1.5; }
+
 .confirm-dialog { width: min(330px, calc(100% - 40px)); border: 0; border-radius: 26px; padding: 26px 22px 21px; background: var(--bg); color: var(--ink); text-align: center; box-shadow: var(--shadow); }
 .confirm-dialog::backdrop { background: rgba(47,35,67,.34); backdrop-filter: blur(3px); }
 .confirm-dialog .confirm-icon { width: 44px; height: 44px; margin: 0 auto 14px; display: grid; place-items: center; border-radius: 50%; background: var(--soft); color: var(--accent-dark); font-size: 20px; font-weight: 800; }

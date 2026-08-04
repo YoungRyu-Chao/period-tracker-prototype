@@ -6,12 +6,16 @@ const toast = document.querySelector('#toast');
 const noPeriodDialog = document.querySelector('#noPeriodDialog');
 const cancelNoPeriod = document.querySelector('#cancelNoPeriod');
 const confirmNoPeriod = document.querySelector('#confirmNoPeriod');
+const quickFlowDialog = document.querySelector('#quickFlowDialog');
 const importFile = document.querySelector('#importFile');
 const importDialog = document.querySelector('#importDialog');
 const exportDialog = document.querySelector('#exportDialog');
 const importSummary = document.querySelector('#importSummary');
 const importFileName = document.querySelector('#importFileName');
 let pendingImport = null;
+let trendLimit = 6;
+let formUsageTimes = { pads: [], tampons: [] };
+let recordApplyMode = 'single';
 const appScriptUrl = document.querySelector('script[src$="app.js"]')?.src;
 const assetBaseUrl = new URL('.', appScriptUrl || document.baseURI);
 const assetUrl = filename => new URL(filename, assetBaseUrl).href;
@@ -189,21 +193,48 @@ function calendar() {
 function trends() {
   const periodRecords = Object.entries(records).filter(([, r]) => r.period === 'yes');
   const metrics = cycleMetrics();
-  const symptomCount = {};
-  Object.values(records).forEach(r => (r.symptoms || []).forEach(s => symptomCount[s] = (symptomCount[s] || 0) + 1));
-  const common = Object.entries(symptomCount).sort((a, b) => b[1] - a[1])[0]?.[0] || '暂无记录';
+  const frequency = {};
+  Object.values(records).forEach(record => {
+    (record.symptoms || []).forEach(item => frequency[item] = (frequency[item] || 0) + 1);
+    if (record.mood) frequency[`情绪·${record.mood}`] = (frequency[`情绪·${record.mood}`] || 0) + 1;
+  });
+  const topFrequency = Object.entries(frequency).sort((a, b) => b[1] - a[1]).slice(0, 6);
+  const maxFrequency = topFrequency[0]?.[1] || 1;
   const totalPads = Object.values(records).reduce((sum, record) => sum + safeCount(record.pads), 0);
   const totalTampons = Object.values(records).reduce((sum, record) => sum + safeCount(record.tampons), 0);
-  const cycleSeed = metrics.intervals.length ? metrics.intervals.slice(-6) : [settings.cycleLength - 1, settings.cycleLength + 1, settings.cycleLength, settings.cycleLength - 2, settings.cycleLength + 2, settings.cycleLength];
+  const cycleSeed = metrics.intervals.length ? metrics.intervals.slice(-trendLimit) : [settings.cycleLength - 1, settings.cycleLength + 1, settings.cycleLength, settings.cycleLength - 2, settings.cycleLength + 2, settings.cycleLength];
   const minCycle = Math.min(...cycleSeed), maxCycle = Math.max(...cycleSeed);
   const heights = cycleSeed.map(value => maxCycle === minCycle ? 72 : Math.round(52 + ((value - minCycle) / (maxCycle - minCycle)) * 40));
-  const chartLabels = metrics.starts.slice(1).slice(-6).map(key => `${fromKey(key).getMonth() + 1}月`);
+  const chartLabels = metrics.starts.slice(1).slice(-trendLimit).map(key => `${fromKey(key).getMonth() + 1}月`);
+  const phaseIds = ['period-phase', 'follicular', 'early-luteal', 'late-luteal'];
+  const phaseNames = { 'period-phase': '经期', follicular: '卵泡期', 'early-luteal': '黄体前期', 'late-luteal': '黄体后期' };
+  const phaseSummary = phaseIds.map(id => {
+    const counts = {};
+    Object.entries(records).forEach(([key, record]) => {
+      if (phaseInfo(key).id !== id) return;
+      (record.symptoms || []).forEach(item => counts[item] = (counts[item] || 0) + 1);
+      if (record.mood) counts[`情绪·${record.mood}`] = (counts[`情绪·${record.mood}`] || 0) + 1;
+    });
+    const common = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
+    return `<div class="phase-insight">${phaseShape(id)}<span><b>${phaseNames[id]}</b><small>${common ? `${common[0]} · ${common[1]} 次` : '暂无症状记录'}</small></span></div>`;
+  }).join('');
+  const monthly = {};
+  Object.entries(records).forEach(([key, record]) => {
+    const month = key.slice(0, 7); monthly[month] ||= { pads: 0, tampons: 0 };
+    monthly[month].pads += safeCount(record.pads); monthly[month].tampons += safeCount(record.tampons);
+  });
+  const monthlyEntries = Object.entries(monthly).filter(([, value]) => value.pads || value.tampons).sort(([a], [b]) => a.localeCompare(b)).slice(-6);
+  const monthlyMax = Math.max(1, ...monthlyEntries.flatMap(([, value]) => [value.pads, value.tampons]));
+  const monthlyRows = monthlyEntries.map(([month, value]) => `<div class="monthly-row"><b>${Number(month.slice(5))}月</b><div><i class="pads-bar" style="width:${Math.round(value.pads / monthlyMax * 100)}%"></i><small>月经巾 ${value.pads}</small></div><div><i class="tampons-bar" style="width:${Math.round(value.tampons / monthlyMax * 100)}%"></i><small>棉条 ${value.tampons}</small></div></div>`).join('');
   return `<h1 class="page-title">周期趋势</h1><div class="subtle">根据已记录的经期开始日自动计算</div>
     <div class="stats"><div class="stat"><strong>${metrics.averageCycle}<small>天</small></strong><span>平均周期</span></div><div class="stat"><strong>${metrics.averagePeriod}<small>天</small></strong><span>平均经期</span></div><div class="stat"><strong>${periodRecords.length}<small>天</small></strong><span>已记录经期</span></div><div class="stat"><strong>${Object.keys(records).length}<small>天</small></strong><span>记录总数</span></div></div>
     <div class="calculation-note"><b>典型周期 ${metrics.typicalCycle} 天</b><span>预测采用中位数；平均周期采用 ${metrics.intervals.length} 个完整周期的算术平均。</span></div>
-    <h2 class="section-title">用品使用</h2><div class="usage-stats"><div><span class="usage-icon">▤</span><p><b>${totalPads}<small> 张</small></b><span>月经巾累计</span></p></div><div><span class="usage-icon tampon">▯</span><p><b>${totalTampons}<small> 支</small></b><span>月经棉条累计</span></p></div></div>
-    <h2 class="section-title">周期长度</h2><div class="chart">${heights.map((h, i) => `<div class="bar ${i === heights.length - 1 ? 'active' : ''}" style="height:${h}%" data-label="${chartLabels[i] || ['3月','4月','5月','6月','7月','本次'][i]}"></div>`).join('')}</div>
-    <div class="insight"><h3>最常记录：${common}</h3><p class="subtle">最近周期预计波动在 2 天以内。预测仅供日常健康记录参考。</p></div>`;
+    <div class="trend-heading"><h2 class="section-title">真实周期长度</h2><div class="trend-toggle"><button data-trend-limit="6" class="${trendLimit === 6 ? 'active' : ''}">最近6次</button><button data-trend-limit="12" class="${trendLimit === 12 ? 'active' : ''}">最近12次</button></div></div>
+    <div class="chart">${heights.map((h, i) => `<div class="bar ${i === heights.length - 1 ? 'active' : ''}" style="height:${h}%" data-label="${chartLabels[i] || '本次'}" data-value="${cycleSeed[i]}天"></div>`).join('')}</div>
+    <h2 class="section-title">症状与情绪频率</h2><div class="frequency-list">${topFrequency.length ? topFrequency.map(([name, count]) => `<div><span><b>${name}</b><small>${count} 次</small></span><i><em style="width:${Math.round(count / maxFrequency * 100)}%"></em></i></div>`).join('') : '<p class="empty-state">记录症状和心情后，这里会显示出现频率。</p>'}</div>
+    <h2 class="section-title">不同阶段对比</h2><div class="phase-comparison">${phaseSummary}</div>
+    <h2 class="section-title">用品月度统计</h2><div class="usage-stats"><div><span class="usage-icon">▤</span><p><b>${totalPads}<small> 张</small></b><span>月经巾累计</span></p></div><div><span class="usage-icon tampon">▯</span><p><b>${totalTampons}<small> 支</small></b><span>棉条累计</span></p></div></div><div class="monthly-usage">${monthlyRows || '<p class="empty-state">记录用品数量后，这里会按月份统计。</p>'}</div>
+    <div class="insight"><p class="subtle">统计只基于已保存的记录，记录越完整越有参考价值。</p></div>`;
 }
 
 function profile() {
@@ -221,6 +252,21 @@ function usageText(record, compact = false) {
   const pads = safeCount(record?.pads), tampons = safeCount(record?.tampons);
   if (!pads && !tampons) return compact ? '' : '尚未记录使用数量';
   return [`月经巾 ${pads} 张`, `棉条 ${tampons} 支`].filter((text, index) => index === 0 ? pads : tampons).join(' · ');
+}
+function cleanTimes(values) { return Array.isArray(values) ? [...new Set(values.filter(value => /^([01]\d|2[0-3]):[0-5]\d$/.test(value)))].sort() : []; }
+function renderUsageTimes() {
+  ['pads', 'tampons'].forEach(type => {
+    const list = document.querySelector(`#${type}TimeList`);
+    list.innerHTML = formUsageTimes[type].map(time => `<button type="button" data-remove-time="${type}" data-time="${time}" aria-label="删除 ${time} 的更换记录">${time}<span>×</span></button>`).join('');
+  });
+}
+function periodRange(key) {
+  if (records[key]?.period !== 'yes') return [];
+  let start = key, end = key, guard = 0;
+  while (records[offsetKey(fromKey(start), -1)]?.period === 'yes' && guard++ < 14) start = offsetKey(fromKey(start), -1);
+  guard = 0;
+  while (records[offsetKey(fromKey(end), 1)]?.period === 'yes' && guard++ < 14) end = offsetKey(fromKey(end), 1);
+  return Array.from({ length: daysBetween(start, end) + 1 }, (_, index) => offsetKey(fromKey(start), index));
 }
 function cycleMetrics() {
   const periodKeys = Object.keys(records).filter(key => records[key]?.period === 'yes').sort();
@@ -263,6 +309,7 @@ function openRecord(dateKey, targets) {
   selectedDate = dateKey || toKey(todayDate);
   recordTargets = targets?.length ? [...targets].sort() : [selectedDate];
   const isBatch = recordTargets.length > 1;
+  recordApplyMode = isBatch ? 'batch' : 'single';
   const record = isBatch ? {} : (records[selectedDate] || {});
   form.reset();
   document.querySelector('#recordTitle').textContent = isBatch ? `批量记录 ${recordTargets.length} 天` : '记录这一天';
@@ -272,9 +319,16 @@ function openRecord(dateKey, targets) {
   if (record.flow) form.elements.flow.value = record.flow;
   form.elements.pads.value = safeCount(record.pads);
   form.elements.tampons.value = safeCount(record.tampons);
+  formUsageTimes = { pads: cleanTimes(record.padTimes), tampons: cleanTimes(record.tamponTimes) };
+  renderUsageTimes();
   [...form.querySelectorAll('input[name="symptoms"]')].forEach(input => input.checked = (record.symptoms || []).includes(input.value));
   if (record.mood) form.elements.mood.value = record.mood;
   form.elements.note.value = record.note || '';
+  const gapToToday = daysBetween(selectedDate, toKey(todayDate));
+  const continueButton = document.querySelector('#continueToToday');
+  continueButton.hidden = isBatch || gapToToday < 1 || gapToToday > 13;
+  document.querySelector('#deleteRecord').hidden = isBatch || !records[selectedDate];
+  document.querySelector('#deletePeriod').hidden = isBatch || record.period !== 'yes';
   dialog.showModal();
 }
 
@@ -288,11 +342,16 @@ function updateLastPeriodStart(targets) {
 function saveRecord() {
   const data = new FormData(form);
   const payload = {
-    period: data.get('period') || 'no', flow: data.get('flow') || '', pads: safeCount(data.get('pads')), tampons: safeCount(data.get('tampons')),
+    period: data.get('period') || 'no', flow: data.get('flow') || '', pads: safeCount(data.get('pads')), tampons: safeCount(data.get('tampons')), padTimes: cleanTimes(formUsageTimes.pads), tamponTimes: cleanTimes(formUsageTimes.tampons),
     symptoms: data.getAll('symptoms'), mood: data.get('mood') || '',
     note: String(data.get('note') || '').trim(), updatedAt: new Date().toISOString()
   };
-  recordTargets.forEach(key => { records[key] = { ...payload, symptoms: [...payload.symptoms] }; });
+  recordTargets.forEach(key => {
+    if (recordApplyMode === 'continuous') {
+      const existing = records[key] || {};
+      records[key] = { ...existing, period: 'yes', flow: payload.flow || existing.flow || '', pads: safeCount(existing.pads), tampons: safeCount(existing.tampons), padTimes: cleanTimes(existing.padTimes), tamponTimes: cleanTimes(existing.tamponTimes), symptoms: existing.symptoms || [], mood: existing.mood || '', note: existing.note || '', updatedAt: new Date().toISOString() };
+    } else records[key] = { ...payload, symptoms: [...payload.symptoms] };
+  });
   updateLastPeriodStart(recordTargets);
   const savedCount = recordTargets.length;
   persist();
@@ -303,12 +362,12 @@ function saveRecord() {
 
 function quickPeriod(value) {
   if (value === 'no') { noPeriodDialog.showModal(); return; }
-  commitQuickPeriod(value);
+  quickFlowDialog.showModal();
 }
 
-function commitQuickPeriod(value) {
+function commitQuickPeriod(value, flow = '') {
   const key = toKey(todayDate);
-  records[key] = { ...(records[key] || {}), period: value, flow: records[key]?.flow || '', pads: safeCount(records[key]?.pads), tampons: safeCount(records[key]?.tampons), symptoms: records[key]?.symptoms || [], mood: records[key]?.mood || '', note: records[key]?.note || '', updatedAt: new Date().toISOString() };
+  records[key] = { ...(records[key] || {}), period: value, flow: flow || records[key]?.flow || '', pads: safeCount(records[key]?.pads), tampons: safeCount(records[key]?.tampons), padTimes: cleanTimes(records[key]?.padTimes), tamponTimes: cleanTimes(records[key]?.tamponTimes), symptoms: records[key]?.symptoms || [], mood: records[key]?.mood || '', note: records[key]?.note || '', updatedAt: new Date().toISOString() };
   if (value === 'yes') updateLastPeriodStart([key]);
   persist();
   render('today');
@@ -490,6 +549,7 @@ screen.addEventListener('click', event => {
   }
   if (action === 'record') return openRecord(date || selectedDate);
   if (action === 'quick-period') return quickPeriod(button.dataset.value);
+  if (button.dataset.trendLimit) { trendLimit = Number(button.dataset.trendLimit); render('trends'); return; }
   if (action === 'toggle-batch') { batchMode = !batchMode; batchDates = []; render('calendar'); return; }
   if (action === 'batch-record' && batchDates.length) return openRecord(batchDates[0], batchDates);
   if (action === 'trends') return render('trends');
@@ -505,10 +565,47 @@ screen.addEventListener('click', event => {
 tabs.forEach(tab => tab.addEventListener('click', () => { if (tab.dataset.page !== 'calendar') { batchMode = false; batchDates = []; } render(tab.dataset.page); }));
 dialog.addEventListener('close', () => { if (dialog.returnValue === 'save') saveRecord(); });
 form.addEventListener('click', event => {
-  const button = event.target.closest('[data-counter]');
-  if (!button) return;
-  const input = form.elements[button.dataset.counter];
-  input.value = safeCount(safeCount(input.value) + Number(button.dataset.step));
+  const counterButton = event.target.closest('[data-counter]');
+  if (counterButton) {
+    const input = form.elements[counterButton.dataset.counter];
+    input.value = safeCount(safeCount(input.value) + Number(counterButton.dataset.step));
+    return;
+  }
+  const addTimeButton = event.target.closest('[data-add-time]');
+  if (addTimeButton) {
+    const type = addTimeButton.dataset.addTime;
+    const input = document.querySelector(`#${type}TimeInput`);
+    const now = new Date();
+    const time = input.value || `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    formUsageTimes[type] = cleanTimes([...formUsageTimes[type], time]);
+    form.elements[type].value = Math.max(safeCount(form.elements[type].value), formUsageTimes[type].length);
+    input.value = ''; renderUsageTimes(); return;
+  }
+  const removeTimeButton = event.target.closest('[data-remove-time]');
+  if (removeTimeButton) {
+    const type = removeTimeButton.dataset.removeTime;
+    formUsageTimes[type] = formUsageTimes[type].filter(time => time !== removeTimeButton.dataset.time);
+    renderUsageTimes();
+  }
+});
+document.querySelector('#continueToToday').addEventListener('click', () => {
+  const length = daysBetween(selectedDate, toKey(todayDate)) + 1;
+  if (length < 2 || length > 14) return;
+  recordTargets = Array.from({ length }, (_, index) => offsetKey(fromKey(selectedDate), index));
+  recordApplyMode = 'continuous';
+  form.elements.period.value = 'yes';
+  document.querySelector('#recordTitle').textContent = `连续记录 ${length} 天`;
+  document.querySelector('#recordCycleDay').textContent = '从所选日期连续记录到今天';
+  document.querySelector('#continueToToday').hidden = true;
+});
+document.querySelector('#deleteRecord').addEventListener('click', () => {
+  if (!confirm(`确定删除 ${cnDate(fromKey(selectedDate))} 的全部记录吗？`)) return;
+  delete records[selectedDate]; persist(); dialog.close(); render(); showToast('这一天的记录已删除');
+});
+document.querySelector('#deletePeriod').addEventListener('click', () => {
+  const range = periodRange(selectedDate); if (!range.length || !confirm(`确定删除这段 ${range.length} 天的经期标记吗？其他症状和备注会保留。`)) return;
+  range.forEach(key => { if (records[key]) { records[key].period = 'no'; records[key].flow = ''; records[key].updatedAt = new Date().toISOString(); } });
+  persist(); dialog.close(); render(); showToast('整段经期标记已删除');
 });
 importFile.addEventListener('change', () => { const file = importFile.files?.[0]; if (file) prepareImport(file); });
 document.querySelector('#closeImport').addEventListener('click', () => { pendingImport = null; importDialog.close(); });
@@ -524,6 +621,11 @@ exportDialog.addEventListener('click', event => {
 });
 cancelNoPeriod.addEventListener('click', () => noPeriodDialog.close());
 confirmNoPeriod.addEventListener('click', () => { noPeriodDialog.close(); commitQuickPeriod('no'); });
+quickFlowDialog.addEventListener('click', event => {
+  const button = event.target.closest('[data-quick-flow]'); if (!button) return;
+  quickFlowDialog.close(); commitQuickPeriod('yes', button.dataset.quickFlow);
+});
+document.querySelector('#cancelQuickFlow').addEventListener('click', () => quickFlowDialog.close());
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') persist(); });
 async function bootstrap() {
   const recovered = await recoverIfNeeded();
