@@ -14,7 +14,12 @@ const importSummary = document.querySelector('#importSummary');
 const importFileName = document.querySelector('#importFileName');
 const cycleSettingsDialog = document.querySelector('#cycleSettingsDialog');
 const cycleSettingsForm = document.querySelector('#cycleSettingsForm');
+const reminderDialog = document.querySelector('#reminderDialog');
+const reminderForm = document.querySelector('#reminderForm');
+const updateDialog = document.querySelector('#updateDialog');
 let pendingImport = null;
+let installPrompt = null;
+let waitingWorker = null;
 let trendLimit = 6;
 let formUsageTimes = { pads: [], tampons: [] };
 let recordApplyMode = 'single';
@@ -36,7 +41,7 @@ let batchMode = false;
 let batchDates = [];
 let recordTargets = [selectedDate];
 let records = load(STORE_KEY, {});
-const defaultSettings = () => ({ cycleLength: 28, periodLength: 5, lastPeriodStart: offsetKey(todayDate, -17), reminder: true, excludedCycles: [] });
+const defaultSettings = () => ({ cycleLength: 28, periodLength: 5, lastPeriodStart: offsetKey(todayDate, -17), reminder: true, excludedCycles: [], periodReminder: false, periodReminderDays: 2, recordReminder: false, recordReminderTime: '20:00' });
 let settings = load(SETTINGS_KEY, defaultSettings());
 settings = { ...defaultSettings(), ...settings, excludedCycles: Array.isArray(settings.excludedCycles) ? settings.excludedCycles : [] };
 
@@ -261,8 +266,9 @@ function profile() {
     <div class="profile-card"><h3>双重本地保护</h3><p class="subtle">${Object.keys(records).length ? `已有 ${Object.keys(records).length} 天记录同时保存在主存储与自动快照。` : '记录将在当前设备进行双重保存，不需要注册账号。'}</p><span class="save-status">● 上次自动保存：${savedLabel}</span><p class="backup-reminder">建议每月下载一次 JSON 完整备份，换手机或清理浏览器后仍可恢复。</p><button class="mini-backup" data-action="export-json">下载 JSON 完整备份</button></div>
     <h2 class="section-title profile-section">周期设置</h2><div class="list">${row('◷','调整周期', `${settings.lastPeriodStart} · 典型 ${settings.cycleLength} 天 · 经期 ${settings.periodLength} 天`,'cycle-settings')}</div>
     <h2 class="section-title profile-section">数据管理</h2><div class="list">${row('⇩','导入备份','导入前预览新增、覆盖与冲突','import')}${row('↺','恢复自动快照','恢复最近一次自动保存的数据','restore-snapshot')}${row('↶','撤销最近一次导入','恢复到导入前的状态','undo-import')}${row('⇧','导出与保存','Markdown、PDF 或 JSON','export')}</div>
-    <h2 class="section-title profile-section">其他</h2><div class="list">${row('⌁','提醒设置', settings.reminder ? '经期前 2 天提醒' : '提醒已关闭','toggle-reminder')}${row('↺','恢复演示数据','清除记录并恢复默认','reset')}${row('?','关于预测','了解计算方式与限制','about')}</div>
-    <div class="insight"><p class="subtle">阶段和日期均为估算，不能用于避孕、诊断或替代专业医疗建议。</p></div>`;
+    <h2 class="section-title profile-section">App 与提醒</h2><div class="pwa-brand"><img src="icons/app-icon-192.png" alt="知期 App 图标"><span><b>知期 App</b><small>可安装 · 可离线使用</small></span></div><div class="list">${installPrompt ? row('＋','安装到手机桌面','离线使用，打开更像 App','install-app') : row('✓','离线使用已准备', navigator.onLine ? '安装后可在无网络时继续记录' : '当前处于离线状态','offline-info')}${row('⌁','提醒设置', `${settings.periodReminder ? `经期前 ${settings.periodReminderDays} 天` : '经期提醒关闭'} · ${settings.recordReminder ? `${settings.recordReminderTime} 记录提醒` : '记录提醒关闭'}`,'reminder-settings')}</div>
+    <h2 class="section-title profile-section">其他</h2><div class="list">${row('↺','恢复演示数据','清除记录并恢复默认','reset')}${row('?','关于预测','了解计算方式与限制','about')}</div>
+    <div class="insight"><p class="subtle">阶段和日期均为估算，不能用于诊断或替代专业医疗建议。</p></div>`;
 }
 
 function flowName(value) { return ({ light: '少量', medium: '适中', heavy: '较多' })[value] || '未记录经量'; }
@@ -315,6 +321,15 @@ function openCycleSettings() {
   const excluded = new Set(settings.excludedCycles || []);
   document.querySelector('#cycleIntervalList').innerHTML = metrics.intervalDetails.length ? metrics.intervalDetails.slice().reverse().map(item => `<label><span><b>${item.days} 天</b><small>${item.start} → ${item.end}</small></span><input type="checkbox" name="includedCycle" value="${item.end}" ${excluded.has(item.end) ? '' : 'checked'}></label>`).join('') : '<p class="empty-state">至少记录两次经期后，这里会显示周期长度。</p>';
   cycleSettingsDialog.showModal();
+}
+function openReminderSettings() {
+  reminderForm.elements.periodReminder.checked = !!settings.periodReminder;
+  reminderForm.elements.periodReminderDays.value = settings.periodReminderDays ?? 2;
+  reminderForm.elements.recordReminder.checked = !!settings.recordReminder;
+  reminderForm.elements.recordReminderTime.value = settings.recordReminderTime || '20:00';
+  const hint = document.querySelector('#notificationHint');
+  hint.textContent = !('Notification' in window) ? '当前浏览器不支持系统通知。' : Notification.permission === 'denied' ? '系统通知已被关闭，请在手机设置中重新允许。' : '首次开启提醒时，系统会询问是否允许通知。';
+  reminderDialog.showModal();
 }
 
 function syncCycleSettingsFromHistory() {
@@ -433,7 +448,7 @@ function markdownReport() {
     '| --- | --- | --- | ---: | ---: | --- | --- | --- |'
   ];
   entries.forEach(([key, record]) => lines.push(`| ${key} | ${record.period === 'yes' ? '是' : '否'} | ${flowName(record.flow)} | ${safeCount(record.pads)} 张 | ${safeCount(record.tampons)} 支 | ${(record.symptoms || []).join('、') || '-'} | ${record.mood || '-'} | ${(record.note || '-').replace(/\|/g, '｜').replace(/\n/g, ' ')} |`));
-  lines.push('', '> 阶段和日期预测仅供日常健康记录参考，不能用于避孕或诊断。');
+  lines.push('', '> 阶段和日期预测仅供日常健康记录参考，不能用于诊断。');
   return lines.join('\n');
 }
 
@@ -442,7 +457,7 @@ function printReport() {
   const rows = entries.map(([key, record]) => `<tr><td>${key}</td><td>${record.period === 'yes' ? '是' : '否'}</td><td>${flowName(record.flow)}</td><td>${safeCount(record.pads)} 张</td><td>${safeCount(record.tampons)} 支</td><td>${(record.symptoms || []).join('、') || '-'}</td><td>${record.mood || '-'}</td></tr>`).join('');
   const popup = window.open('', '_blank');
   if (!popup) { showToast('请允许打开打印页面'); return; }
-  popup.document.write(`<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>知期健康记录</title><style>body{font-family:system-ui,"Microsoft YaHei";color:#392b4f;margin:32px}h1{color:#7657b8}p{color:#766d82}table{width:100%;border-collapse:collapse;font-size:12px}th,td{border:1px solid #ddd5e8;padding:8px;text-align:left}th{background:#f3eefb}.note{margin-top:22px;font-size:11px}@media print{body{margin:15mm}}</style></head><body><h1>知期 · 经期健康记录</h1><p>导出日期：${cnDate(todayDate)}　平均周期：${settings.cycleLength} 天　记录：${entries.length} 天</p><table><thead><tr><th>日期</th><th>经期</th><th>经量</th><th>月经巾</th><th>棉条</th><th>症状</th><th>心情</th></tr></thead><tbody>${rows || '<tr><td colspan="7">暂无记录</td></tr>'}</tbody></table><p class="note">阶段和日期预测仅供日常健康记录参考，不能用于避孕或诊断。</p><script>window.onload=()=>window.print()<\/script></body></html>`);
+  popup.document.write(`<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>知期健康记录</title><style>body{font-family:system-ui,"Microsoft YaHei";color:#392b4f;margin:32px}h1{color:#7657b8}p{color:#766d82}table{width:100%;border-collapse:collapse;font-size:12px}th,td{border:1px solid #ddd5e8;padding:8px;text-align:left}th{background:#f3eefb}.note{margin-top:22px;font-size:11px}@media print{body{margin:15mm}}</style></head><body><h1>知期 · 经期健康记录</h1><p>导出日期：${cnDate(todayDate)}　平均周期：${settings.cycleLength} 天　记录：${entries.length} 天</p><table><thead><tr><th>日期</th><th>经期</th><th>经量</th><th>月经巾</th><th>棉条</th><th>症状</th><th>心情</th></tr></thead><tbody>${rows || '<tr><td colspan="7">暂无记录</td></tr>'}</tbody></table><p class="note">阶段和日期预测仅供日常健康记录参考，不能用于诊断。</p><script>window.onload=()=>window.print()<\/script></body></html>`);
   popup.document.close();
 }
 
@@ -604,12 +619,15 @@ screen.addEventListener('click', event => {
   if (action === 'toggle-reminder') { settings.reminder = !settings.reminder; persist(); render('profile'); showToast(settings.reminder ? '提醒已开启' : '提醒已关闭'); return; }
   if (action === 'import') return importFile.click();
   if (action === 'cycle-settings') return openCycleSettings();
+  if (action === 'reminder-settings') return openReminderSettings();
+  if (action === 'install-app' && installPrompt) { installPrompt.prompt(); installPrompt.userChoice.finally(() => { installPrompt = null; render('profile'); }); return; }
+  if (action === 'offline-info') return showToast(navigator.onLine ? '离线功能已准备，可从浏览器菜单安装' : '当前可继续离线记录');
   if (action === 'restore-snapshot') return restoreSnapshot('latest', '恢复自动快照');
   if (action === 'undo-import') return restoreSnapshot('before-import', '撤销最近一次导入');
   if (action === 'export-json') { exportData(); showToast('JSON 完整备份已下载'); return; }
   if (action === 'export') { exportDialog.showModal(); return; }
   if (action === 'reset' && confirm('确定清除当前设备上的所有记录吗？')) { records = {}; settings = defaultSettings(); batchMode = false; batchDates = []; persist(); render('profile'); showToast('记录与周期设置已恢复'); return; }
-  if (action === 'about') return alert('阶段预测基于最近一次经期开始日与平均周期估算。实际排卵日和各阶段长度会波动，不能用于避孕、诊断或替代专业医疗建议。');
+  if (action === 'about') return alert('阶段预测基于最近一次经期开始日与平均周期估算。实际排卵日和各阶段长度会波动，不能用于诊断或替代专业医疗建议。');
   if (action === 'privacy') return showToast('本地隐私模式已开启');
 });
 
@@ -680,6 +698,17 @@ cycleSettingsForm.addEventListener('submit', event => {
   }
   persist(); cycleSettingsDialog.close(); render('profile'); showToast('周期设置已保存');
 });
+document.querySelector('#closeReminderSettings').addEventListener('click', () => reminderDialog.close());
+reminderForm.addEventListener('submit', async event => {
+  event.preventDefault();
+  const wantsNotifications = reminderForm.elements.periodReminder.checked || reminderForm.elements.recordReminder.checked;
+  if (wantsNotifications && 'Notification' in window && Notification.permission === 'default') await Notification.requestPermission();
+  settings.periodReminder = reminderForm.elements.periodReminder.checked;
+  settings.periodReminderDays = Math.max(0, Math.min(7, Number(reminderForm.elements.periodReminderDays.value) || 0));
+  settings.recordReminder = reminderForm.elements.recordReminder.checked;
+  settings.recordReminderTime = reminderForm.elements.recordReminderTime.value || '20:00';
+  persist(); reminderDialog.close(); render('profile'); showToast('提醒设置已保存'); checkReminders();
+});
 document.querySelector('#closeExport').addEventListener('click', () => exportDialog.close());
 exportDialog.addEventListener('click', event => {
   const button = event.target.closest('[data-export-format]'); if (!button) return;
@@ -697,10 +726,50 @@ quickFlowDialog.addEventListener('click', event => {
 });
 document.querySelector('#cancelQuickFlow').addEventListener('click', () => quickFlowDialog.close());
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') persist(); });
+window.addEventListener('beforeinstallprompt', event => { event.preventDefault(); installPrompt = event; if (activePage === 'profile') render('profile'); });
+window.addEventListener('online', () => { if (activePage === 'profile') render('profile'); showToast('网络已恢复'); });
+window.addEventListener('offline', () => { if (activePage === 'profile') render('profile'); showToast('已进入离线模式'); });
+
+async function notify(title, body, tag) {
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  const registration = await navigator.serviceWorker?.ready;
+  if (registration) registration.showNotification(title, { body, tag, icon: 'icons/app-icon-192.png', badge: 'icons/app-icon-192.png' });
+  else new Notification(title, { body, tag, icon: 'icons/app-icon-192.png' });
+}
+function checkReminders() {
+  const now = new Date();
+  const dayKey = toKey(now);
+  const reminderLog = load('zhiqi-reminder-log-v1', {});
+  if (settings.periodReminder && relativeDays(nextPeriodDate()) === settings.periodReminderDays && reminderLog.period !== dayKey) {
+    notify('知期提醒', '预计经期临近，可以提前准备月经用品。', 'period-reminder'); reminderLog.period = dayKey;
+  }
+  const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+  if (settings.recordReminder && currentTime === settings.recordReminderTime && reminderLog.record !== dayKey) {
+    notify('知期提醒', '今天的记录还可以再补充一下。', 'record-reminder'); reminderLog.record = dayKey;
+  }
+  localStorage.setItem('zhiqi-reminder-log-v1', JSON.stringify(reminderLog));
+}
+async function registerPwa() {
+  if (!('serviceWorker' in navigator) || location.protocol === 'file:') return;
+  const registration = await navigator.serviceWorker.register('./sw.js');
+  if (registration.waiting) { waitingWorker = registration.waiting; updateDialog.showModal(); }
+  registration.addEventListener('updatefound', () => {
+    const worker = registration.installing;
+    worker?.addEventListener('statechange', () => {
+      if (worker.state === 'installed' && navigator.serviceWorker.controller) { waitingWorker = worker; updateDialog.showModal(); }
+    });
+  });
+  navigator.serviceWorker.addEventListener('controllerchange', () => location.reload());
+}
+document.querySelector('#updateLater').addEventListener('click', () => updateDialog.close());
+document.querySelector('#updateNow').addEventListener('click', () => { waitingWorker?.postMessage('SKIP_WAITING'); updateDialog.close(); });
 async function bootstrap() {
   const recovered = await recoverIfNeeded();
   syncCycleSettingsFromHistory();
   render('today');
+  registerPwa().catch(() => {});
+  checkReminders();
+  setInterval(checkReminders, 60000);
   if (recovered) showToast('已从自动快照恢复记录');
 }
 bootstrap();

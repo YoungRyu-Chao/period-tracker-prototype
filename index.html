@@ -4,7 +4,13 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#faf8ff" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="知期" />
   <title>知期 · 经期记录原型</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="icons/app-icon-192.png" />
+  <link rel="icon" href="icons/app-icon-192.png" />
   <link rel="stylesheet" href="styles.css" />
   <link rel="stylesheet" href="v2.css" />
 </head>
@@ -68,6 +74,24 @@
       <div id="cycleIntervalList" class="cycle-interval-list"></div>
       <button class="backup-primary" type="submit">保存周期设置</button>
     </form>
+  </dialog>
+  <dialog id="reminderDialog" class="backup-dialog settings-dialog">
+    <button class="dialog-close" id="closeReminderSettings" aria-label="关闭">×</button>
+    <div class="backup-icon">⌁</div><h2>提醒设置</h2>
+    <p class="backup-subtle">提醒内容不会显示具体健康数据</p>
+    <form id="reminderForm">
+      <label class="reminder-row"><span><b>经期提醒</b><small>预计经期前提醒你准备</small></span><input type="checkbox" name="periodReminder"></label>
+      <label class="settings-field">提前天数<input type="number" name="periodReminderDays" min="0" max="7" value="2"><small>天</small></label>
+      <label class="reminder-row"><span><b>每日记录提醒</b><small>提醒补充当天的记录</small></span><input type="checkbox" name="recordReminder"></label>
+      <label class="settings-field">提醒时间<input type="time" name="recordReminderTime" value="20:00"></label>
+      <button class="backup-primary" type="submit">保存提醒设置</button>
+      <p id="notificationHint" class="privacy-note reminder-hint"></p>
+      <p class="privacy-note reminder-hint">当前 PWA 会在应用运行时检查提醒；后续封装原生应用后可提供更稳定的后台提醒。</p>
+    </form>
+  </dialog>
+  <dialog id="updateDialog" class="confirm-dialog">
+    <div class="confirm-icon">↻</div><h2>发现新版本</h2><p>更新后会获得最新功能，已有记录不会丢失。</p>
+    <div class="confirm-actions"><button id="updateLater">稍后</button><button id="updateNow" class="confirm">立即更新</button></div>
   </dialog>
   <dialog id="exportDialog" class="backup-dialog">
     <button class="dialog-close" id="closeExport" aria-label="关闭">×</button>

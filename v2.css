@@ -204,6 +204,14 @@
 .cycle-interval-list label { display: flex; justify-content: space-between; align-items: center; padding: 10px 3px; border-bottom: 1px solid var(--line); }
 .cycle-interval-list label:last-child { border-bottom: 0; }.cycle-interval-list b,.cycle-interval-list small { display: block; }
 .cycle-interval-list b { font-size: 12px; }.cycle-interval-list small { margin-top: 3px; color: var(--muted); font-size: 9px; }
+.reminder-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 18px; padding: 14px; border-radius: 16px; background: #fff; }
+.reminder-row span,.reminder-row b,.reminder-row small { display: block; }
+.reminder-row b { font-size: 12px; }.reminder-row small { margin-top: 4px; color: var(--muted); font-size: 9px; }
+.reminder-row input { width: 42px; height: 24px; accent-color: var(--accent); }
+.reminder-hint { margin: 12px 2px 0; text-align: center; }
+.pwa-brand { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; padding: 12px 14px; border-radius: 18px; background: linear-gradient(135deg, #fff, var(--soft)); }
+.pwa-brand img { width: 52px; height: 52px; border-radius: 15px; box-shadow: 0 6px 16px rgba(111,75,195,.15); }
+.pwa-brand b,.pwa-brand small { display: block; }.pwa-brand b { font-size: 14px; }.pwa-brand small { margin-top: 4px; color: var(--muted); font-size: 10px; }
 
 .calculation-note { display: flex; align-items: center; justify-content: space-between; gap: 15px; margin: -3px 0 20px; padding: 13px 14px; border-radius: 16px; background: var(--soft); }
 .calculation-note b { flex: 0 0 auto; color: var(--accent-dark); font-size: 12px; }
