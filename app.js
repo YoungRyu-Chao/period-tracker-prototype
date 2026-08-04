@@ -94,6 +94,7 @@ function today() {
   const phase = phaseInfo(todayKey);
   const symptomText = record?.symptoms?.length ? record.symptoms.join('、') : '尚未记录';
   const periodText = record?.period === 'yes' ? `今天有经期 · ${flowName(record.flow)}` : record?.period === 'no' ? '今天没有来' : `本周期预计 ${settings.periodLength} 天`;
+  const productText = usageText(record);
   return `<div class="topline"><div><h1>今天</h1><div class="date">${cnDate(todayDate, true)}</div></div><button class="privacy" aria-label="隐私模式" data-action="privacy">◉</button></div>
     ${weekStrip()}
     <div class="cycle"><div class="cycle-content"><small>预计${phase.name}</small><strong>第 ${cycleDay(todayKey)} 天</strong><span>${daysToNext >= 0 ? `预计 ${daysToNext} 天后` : '请更新经期日期'}</span></div></div>
@@ -102,7 +103,7 @@ function today() {
     <div class="quick-period"><div><b>今天月经来了吗？</b><small>${record?.period ? '已记录，可随时修改' : '一秒完成快速记录'}</small></div><div class="quick-actions"><button data-action="quick-period" data-value="yes" class="${record?.period === 'yes' ? 'active' : ''}">来了</button><button data-action="quick-period" data-value="no" class="${record?.period === 'no' ? 'active' : ''}">没有</button></div></div>
     <button class="primary" data-action="record" data-date="${todayKey}">${record ? '补充详细记录' : '记录更多感受'}</button>
     <p class="prediction">预计下次经期 <b>${cnDate(fromKey(next))}</b></p>
-    <h2 class="section-title">今日记录</h2><div class="list">${row('♡', '症状与感受', symptomText, 'record')}${row('◔', '经期记录', periodText, 'record')}${row('⌁', '周期趋势', `平均周期 ${settings.cycleLength} 天`, 'trends')}</div>`;
+    <h2 class="section-title">今日记录</h2><div class="list">${row('♡', '症状与感受', symptomText, 'record')}${row('◔', '经期记录', periodText, 'record')}${row('▤', '卫生用品', productText, 'record')}${row('⌁', '周期趋势', `平均周期 ${settings.cycleLength} 天`, 'trends')}</div>`;
 }
 
 function calendar() {
@@ -120,7 +121,7 @@ function calendar() {
   }
   const selectedRecord = records[selectedDate];
   const selectedPhase = phaseInfo(selectedDate);
-  const summary = selectedRecord ? [selectedRecord.period === 'yes' ? `经期·${flowName(selectedRecord.flow)}` : '非经期', ...(selectedRecord.symptoms || []), selectedRecord.mood].filter(Boolean).join(' · ') : '尚未记录这一天';
+  const summary = selectedRecord ? [selectedRecord.period === 'yes' ? `经期·${flowName(selectedRecord.flow)}` : '非经期', usageText(selectedRecord, true), ...(selectedRecord.symptoms || []), selectedRecord.mood].filter(Boolean).join(' · ') : '尚未记录这一天';
   const batchPanel = batchMode ? `<div class="batch-panel"><span><b>已选 ${batchDates.length} 天</b><small>再次点击可取消</small></span><button data-action="batch-record" ${batchDates.length ? '' : 'disabled'}>批量记录</button></div>` : '';
   return `<div class="calendar-title"><div><h1 class="page-title">日历</h1><div class="subtle">${batchMode ? '点击多个日期进行批量记录' : '查看阶段预测或补充记录'}</div></div><button class="multi-toggle ${batchMode ? 'active' : ''}" data-action="toggle-batch">${batchMode ? '取消多选' : '多选日期'}</button></div>
     <div class="calendar-head"><button data-action="prev-month" aria-label="上个月">‹</button><b>${year}年${month + 1}月</b><button data-action="next-month" aria-label="下个月">›</button></div>
@@ -135,10 +136,13 @@ function trends() {
   const symptomCount = {};
   Object.values(records).forEach(r => (r.symptoms || []).forEach(s => symptomCount[s] = (symptomCount[s] || 0) + 1));
   const common = Object.entries(symptomCount).sort((a, b) => b[1] - a[1])[0]?.[0] || '暂无记录';
+  const totalPads = Object.values(records).reduce((sum, record) => sum + safeCount(record.pads), 0);
+  const totalTampons = Object.values(records).reduce((sum, record) => sum + safeCount(record.tampons), 0);
   const cycleSeed = [settings.cycleLength - 1, settings.cycleLength + 1, settings.cycleLength, settings.cycleLength - 2, settings.cycleLength + 2, settings.cycleLength];
   const heights = cycleSeed.map(v => Math.max(48, Math.min(96, 58 + (v - 24) * 5)));
   return `<h1 class="page-title">周期趋势</h1><div class="subtle">记录越完整，趋势越准确</div>
     <div class="stats"><div class="stat"><strong>${settings.cycleLength}<small>天</small></strong><span>平均周期</span></div><div class="stat"><strong>${settings.periodLength}<small>天</small></strong><span>平均经期</span></div><div class="stat"><strong>${periodRecords.length}<small>天</small></strong><span>已记录经期</span></div><div class="stat"><strong>${Object.keys(records).length}<small>天</small></strong><span>记录总数</span></div></div>
+    <h2 class="section-title">用品使用</h2><div class="usage-stats"><div><span class="usage-icon">▤</span><p><b>${totalPads}<small> 张</small></b><span>月经巾累计</span></p></div><div><span class="usage-icon tampon">▯</span><p><b>${totalTampons}<small> 支</small></b><span>月经棉条累计</span></p></div></div>
     <h2 class="section-title">周期长度</h2><div class="chart">${heights.map((h, i) => `<div class="bar ${i === 5 ? 'active' : ''}" style="height:${h}%" data-label="${['3月','4月','5月','6月','7月','本次'][i]}"></div>`).join('')}</div>
     <div class="insight"><h3>最常记录：${common}</h3><p class="subtle">最近周期预计波动在 2 天以内。预测仅供日常健康记录参考。</p></div>`;
 }
@@ -151,6 +155,12 @@ function profile() {
 }
 
 function flowName(value) { return ({ light: '少量', medium: '适中', heavy: '较多' })[value] || '未记录经量'; }
+function safeCount(value) { const count = Number.parseInt(value, 10); return Number.isFinite(count) ? Math.max(0, Math.min(50, count)) : 0; }
+function usageText(record, compact = false) {
+  const pads = safeCount(record?.pads), tampons = safeCount(record?.tampons);
+  if (!pads && !tampons) return compact ? '' : '尚未记录使用数量';
+  return [`月经巾 ${pads} 张`, `棉条 ${tampons} 支`].filter((text, index) => index === 0 ? pads : tampons).join(' · ');
+}
 const pages = { today, calendar, trends, profile };
 
 function render(page = activePage) {
@@ -176,6 +186,8 @@ function openRecord(dateKey, targets) {
   document.querySelector('#recordCycleDay').textContent = isBatch ? '所选日期将使用相同记录' : `预计${phaseInfo(selectedDate).name} · 周期第 ${cycleDay(selectedDate)} 天`;
   form.elements.period.value = record.period || 'no';
   if (record.flow) form.elements.flow.value = record.flow;
+  form.elements.pads.value = safeCount(record.pads);
+  form.elements.tampons.value = safeCount(record.tampons);
   [...form.querySelectorAll('input[name="symptoms"]')].forEach(input => input.checked = (record.symptoms || []).includes(input.value));
   if (record.mood) form.elements.mood.value = record.mood;
   form.elements.note.value = record.note || '';
@@ -192,7 +204,7 @@ function updateLastPeriodStart(targets) {
 function saveRecord() {
   const data = new FormData(form);
   const payload = {
-    period: data.get('period') || 'no', flow: data.get('flow') || '',
+    period: data.get('period') || 'no', flow: data.get('flow') || '', pads: safeCount(data.get('pads')), tampons: safeCount(data.get('tampons')),
     symptoms: data.getAll('symptoms'), mood: data.get('mood') || '',
     note: String(data.get('note') || '').trim(), updatedAt: new Date().toISOString()
   };
@@ -212,7 +224,7 @@ function quickPeriod(value) {
 
 function commitQuickPeriod(value) {
   const key = toKey(todayDate);
-  records[key] = { ...(records[key] || {}), period: value, flow: records[key]?.flow || '', symptoms: records[key]?.symptoms || [], mood: records[key]?.mood || '', note: records[key]?.note || '', updatedAt: new Date().toISOString() };
+  records[key] = { ...(records[key] || {}), period: value, flow: records[key]?.flow || '', pads: safeCount(records[key]?.pads), tampons: safeCount(records[key]?.tampons), symptoms: records[key]?.symptoms || [], mood: records[key]?.mood || '', note: records[key]?.note || '', updatedAt: new Date().toISOString() };
   if (value === 'yes') updateLastPeriodStart([key]);
   persist();
   render('today');
@@ -250,6 +262,12 @@ screen.addEventListener('click', event => {
 
 tabs.forEach(tab => tab.addEventListener('click', () => { if (tab.dataset.page !== 'calendar') { batchMode = false; batchDates = []; } render(tab.dataset.page); }));
 dialog.addEventListener('close', () => { if (dialog.returnValue === 'save') saveRecord(); });
+form.addEventListener('click', event => {
+  const button = event.target.closest('[data-counter]');
+  if (!button) return;
+  const input = form.elements[button.dataset.counter];
+  input.value = safeCount(safeCount(input.value) + Number(button.dataset.step));
+});
 cancelNoPeriod.addEventListener('click', () => noPeriodDialog.close());
 confirmNoPeriod.addEventListener('click', () => { noPeriodDialog.close(); commitQuickPeriod('no'); });
 render('today');
