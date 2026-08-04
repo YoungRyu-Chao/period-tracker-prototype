@@ -6,6 +6,12 @@ const toast = document.querySelector('#toast');
 const noPeriodDialog = document.querySelector('#noPeriodDialog');
 const cancelNoPeriod = document.querySelector('#cancelNoPeriod');
 const confirmNoPeriod = document.querySelector('#confirmNoPeriod');
+const importFile = document.querySelector('#importFile');
+const importDialog = document.querySelector('#importDialog');
+const exportDialog = document.querySelector('#exportDialog');
+const importSummary = document.querySelector('#importSummary');
+const importFileName = document.querySelector('#importFileName');
+let pendingImport = null;
 
 const STORE_KEY = 'zhiqi-records-v2';
 const SETTINGS_KEY = 'zhiqi-settings-v2';
@@ -150,7 +156,7 @@ function trends() {
 function profile() {
   return `<h1 class="page-title">我的</h1><div class="subtle">数据只属于你</div>
     <div class="profile-card"><h3>本地隐私保护</h3><p class="subtle">${Object.keys(records).length ? `已有 ${Object.keys(records).length} 天记录保存在当前设备。` : '记录仅保存在当前设备，不需要注册账号。'}</p></div>
-    <div class="list">${row('⌁','提醒设置', settings.reminder ? '经期前 2 天提醒' : '提醒已关闭','toggle-reminder')}${row('▣','导出数据','下载 JSON 备份','export')}${row('↺','恢复演示数据','清除记录并恢复默认','reset')}${row('?','关于预测','了解计算方式与限制','about')}</div>
+    <div class="list">${row('⌁','提醒设置', settings.reminder ? '经期前 2 天提醒' : '提醒已关闭','toggle-reminder')}${row('⇩','导入备份','支持知期 JSON、苹果健康 PDF/XML','import')}${row('⇧','导出与保存','Markdown、PDF 或 JSON','export')}${row('↺','恢复演示数据','清除记录并恢复默认','reset')}${row('?','关于预测','了解计算方式与限制','about')}</div>
     <div class="insight"><p class="subtle">阶段和日期均为估算，不能用于避孕、诊断或替代专业医疗建议。</p></div>`;
 }
 
@@ -237,6 +243,158 @@ function exportData() {
   showToast('备份文件已导出');
 }
 
+function downloadText(content, filename, type = 'text/plain;charset=utf-8') {
+  const blob = new Blob([content], { type });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob); link.download = filename; link.click(); URL.revokeObjectURL(link.href);
+}
+
+function markdownReport() {
+  const entries = Object.entries(records).sort(([a], [b]) => a.localeCompare(b));
+  const lines = [
+    '# 知期 · 经期健康记录', '',
+    `导出日期：${cnDate(todayDate)}`, '',
+    `- 平均周期：${settings.cycleLength} 天`,
+    `- 平均经期：${settings.periodLength} 天`,
+    `- 记录总数：${entries.length} 天`, '',
+    '## 每日记录', '',
+    '| 日期 | 经期 | 经量 | 月经巾 | 棉条 | 症状 | 心情 | 备注 |',
+    '| --- | --- | --- | ---: | ---: | --- | --- | --- |'
+  ];
+  entries.forEach(([key, record]) => lines.push(`| ${key} | ${record.period === 'yes' ? '是' : '否'} | ${flowName(record.flow)} | ${safeCount(record.pads)} 张 | ${safeCount(record.tampons)} 支 | ${(record.symptoms || []).join('、') || '-'} | ${record.mood || '-'} | ${(record.note || '-').replace(/\|/g, '｜').replace(/\n/g, ' ')} |`));
+  lines.push('', '> 阶段和日期预测仅供日常健康记录参考，不能用于避孕或诊断。');
+  return lines.join('\n');
+}
+
+function printReport() {
+  const entries = Object.entries(records).sort(([a], [b]) => a.localeCompare(b));
+  const rows = entries.map(([key, record]) => `<tr><td>${key}</td><td>${record.period === 'yes' ? '是' : '否'}</td><td>${flowName(record.flow)}</td><td>${safeCount(record.pads)} 张</td><td>${safeCount(record.tampons)} 支</td><td>${(record.symptoms || []).join('、') || '-'}</td><td>${record.mood || '-'}</td></tr>`).join('');
+  const popup = window.open('', '_blank');
+  if (!popup) { showToast('请允许打开打印页面'); return; }
+  popup.document.write(`<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>知期健康记录</title><style>body{font-family:system-ui,"Microsoft YaHei";color:#392b4f;margin:32px}h1{color:#7657b8}p{color:#766d82}table{width:100%;border-collapse:collapse;font-size:12px}th,td{border:1px solid #ddd5e8;padding:8px;text-align:left}th{background:#f3eefb}.note{margin-top:22px;font-size:11px}@media print{body{margin:15mm}}</style></head><body><h1>知期 · 经期健康记录</h1><p>导出日期：${cnDate(todayDate)}　平均周期：${settings.cycleLength} 天　记录：${entries.length} 天</p><table><thead><tr><th>日期</th><th>经期</th><th>经量</th><th>月经巾</th><th>棉条</th><th>症状</th><th>心情</th></tr></thead><tbody>${rows || '<tr><td colspan="7">暂无记录</td></tr>'}</tbody></table><p class="note">阶段和日期预测仅供日常健康记录参考，不能用于避孕或诊断。</p><script>window.onload=()=>window.print()<\/script></body></html>`);
+  popup.document.close();
+}
+
+function appleFlow(value) {
+  const text = String(value || '').toLowerCase();
+  if (text.includes('heavy') || text === '4') return 'heavy';
+  if (text.includes('medium') || text === '3') return 'medium';
+  if (text.includes('light') || text === '2') return 'light';
+  return '';
+}
+
+function parseAppleHealthXml(text) {
+  const documentXml = new DOMParser().parseFromString(text, 'application/xml');
+  if (documentXml.querySelector('parsererror')) throw new Error('XML 文件无法读取');
+  const samples = [...documentXml.querySelectorAll('Record[type="HKCategoryTypeIdentifierMenstrualFlow"]')];
+  const imported = {};
+  samples.forEach(sample => {
+    const start = String(sample.getAttribute('startDate') || '').slice(0, 10);
+    const end = String(sample.getAttribute('endDate') || start).slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(start)) return;
+    const span = Math.max(0, Math.min(13, daysBetween(start, /^\d{4}-\d{2}-\d{2}$/.test(end) ? end : start)));
+    for (let i = 0; i <= span; i++) {
+      const key = offsetKey(fromKey(start), i);
+      imported[key] = { ...(records[key] || {}), period: 'yes', flow: appleFlow(sample.getAttribute('value')), pads: safeCount(records[key]?.pads), tampons: safeCount(records[key]?.tampons), symptoms: records[key]?.symptoms || [], mood: records[key]?.mood || '', note: records[key]?.note || '', importedFrom: 'Apple Health', updatedAt: new Date().toISOString() };
+    }
+  });
+  if (!Object.keys(imported).length) throw new Error('未识别到苹果健康中的经期记录');
+  return { records: imported, source: '苹果健康 XML' };
+}
+
+function normalizeAppleText(text) {
+  return String(text || '').normalize('NFKC').replace(/[–—]/g, '至').split(/\r?\n/).map(line => line.replace(/[ \t]+/g, ' ').trim()).filter(Boolean).join('\n');
+}
+
+function applePdfRecord(key) {
+  return { ...(records[key] || {}), period: 'yes', flow: records[key]?.flow || '', pads: safeCount(records[key]?.pads), tampons: safeCount(records[key]?.tampons), symptoms: records[key]?.symptoms || [], mood: records[key]?.mood || '', note: records[key]?.note || '', importedFrom: 'Apple Health PDF', updatedAt: new Date().toISOString() };
+}
+
+async function parseAppleHealthPdf(file) {
+  const pdfjs = await import('./pdf.min.mjs');
+  pdfjs.GlobalWorkerOptions.workerSrc = './pdf.worker.min.mjs';
+  const pdf = await pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
+  if (pdf.numPages < 2) throw new Error('这不是苹果健康的经期历史 PDF');
+  const pageTexts = [];
+  for (let pageNumber = 1; pageNumber <= Math.min(2, pdf.numPages); pageNumber++) {
+    const page = await pdf.getPage(pageNumber);
+    const content = await page.getTextContent();
+    let pageText = '';
+    content.items.forEach(item => { pageText += `${item.str}${item.hasEOL ? '\n' : ' '}`; });
+    pageTexts.push(normalizeAppleText(pageText));
+  }
+  const summaryText = pageTexts.join('\n');
+  if (!summaryText.includes('经期摘要') && !summaryText.includes('经期历史')) throw new Error('未找到苹果健康经期摘要');
+  const cycleMatch = summaryText.match(/一般周[^\n]*?(\d+)\s*天/);
+  const periodMatch = summaryText.match(/一般月经[^\n]*?(\d+)\s*天/);
+  const tableMarker = summaryText.indexOf('年份');
+  const history = tableMarker >= 0 ? summaryText.slice(tableMarker) : summaryText;
+  const uniqueStarts = [];
+  let currentYear = todayDate.getFullYear();
+  history.split('\n').forEach((line, index) => {
+    const explicit = line.match(/^(20\d{2})\s*年\s*(?:开始时间\D*)?(\d{1,2})\s*月\s*(\d{1,2})\s*日/);
+    const implicit = line.match(/^(\d{1,2})\s*月\s*(\d{1,2})\s*日/);
+    let year, month, day;
+    if (explicit) { year = Number(explicit[1]); currentYear = year; month = Number(explicit[2]); day = Number(explicit[3]); }
+    else if (implicit) { year = currentYear; month = Number(implicit[1]); day = Number(implicit[2]); }
+    else return;
+    const lengths = [...line.matchAll(/(\d{1,2})\s*天/g)].map(match => Number(match[1]));
+    const menstrualLength = Math.max(1, Math.min(10, lengths.at(-1) || Number(periodMatch?.[1]) || 5));
+    const key = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    if (!uniqueStarts.some(entry => entry.key === key)) uniqueStarts.push({ key, index, menstrualLength });
+  });
+  const imported = {};
+  uniqueStarts.forEach(item => {
+    for (let offset = 0; offset < item.menstrualLength; offset++) {
+      const key = offsetKey(fromKey(item.key), offset);
+      imported[key] = applePdfRecord(key);
+    }
+  });
+  if (!Object.keys(imported).length) throw new Error('未识别到 PDF 中的经期日期');
+  return { records: imported, settings: { cycleLength: Number(cycleMatch?.[1]) || settings.cycleLength, periodLength: Number(periodMatch?.[1]) || settings.periodLength }, source: `苹果健康 PDF · ${uniqueStarts.length} 次经期` };
+}
+
+function parseJsonBackup(text) {
+  const data = JSON.parse(text);
+  if (!data || typeof data.records !== 'object' || Array.isArray(data.records)) throw new Error('不是有效的知期备份');
+  const clean = {};
+  Object.entries(data.records).forEach(([key, record]) => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(key) || !record || typeof record !== 'object') return;
+    clean[key] = { ...record, pads: safeCount(record.pads), tampons: safeCount(record.tampons), symptoms: Array.isArray(record.symptoms) ? record.symptoms : [] };
+  });
+  return { records: clean, settings: data.settings, source: '知期 JSON 备份' };
+}
+
+async function prepareImport(file) {
+  try {
+    const lowerName = file.name.toLowerCase();
+    if (lowerName.endsWith('.pdf')) pendingImport = await parseAppleHealthPdf(file);
+    else {
+      const text = await file.text();
+      pendingImport = lowerName.endsWith('.xml') ? parseAppleHealthXml(text) : parseJsonBackup(text);
+    }
+    const keys = Object.keys(pendingImport.records).sort();
+    if (!keys.length) throw new Error('文件中没有可导入的记录');
+    const displayName = lowerName.endsWith('.pdf') ? '苹果健康经期历史 PDF' : file.name;
+    importFileName.textContent = `${displayName} · ${pendingImport.source}`;
+    importSummary.innerHTML = `<div><strong>${keys.length}</strong><span>识别记录天数</span></div><p>${keys[0]} 至 ${keys.at(-1)}</p>`;
+    importDialog.showModal();
+  } catch (error) {
+    pendingImport = null;
+    alert(`无法导入：${error.message}`);
+  } finally { importFile.value = ''; }
+}
+
+function applyImport() {
+  if (!pendingImport) return;
+  records = { ...records, ...pendingImport.records };
+  if (pendingImport.settings && typeof pendingImport.settings === 'object') settings = { ...settings, ...pendingImport.settings };
+  const periodKeys = Object.keys(pendingImport.records).filter(key => pendingImport.records[key]?.period === 'yes' && key <= toKey(todayDate)).sort();
+  if (periodKeys.length) settings.lastPeriodStart = periodKeys.at(-1);
+  const count = Object.keys(pendingImport.records).length;
+  persist(); pendingImport = null; importDialog.close(); render('profile'); showToast(`已导入 ${count} 天记录`);
+}
+
 screen.addEventListener('click', event => {
   const button = event.target.closest('button'); if (!button) return;
   const action = button.dataset.action, date = button.dataset.date;
@@ -254,7 +412,8 @@ screen.addEventListener('click', event => {
   if (action === 'trends') return render('trends');
   if (action === 'prev-month' || action === 'next-month') { calendarCursor.setMonth(calendarCursor.getMonth() + (action === 'next-month' ? 1 : -1)); render('calendar'); return; }
   if (action === 'toggle-reminder') { settings.reminder = !settings.reminder; persist(); render('profile'); showToast(settings.reminder ? '提醒已开启' : '提醒已关闭'); return; }
-  if (action === 'export') return exportData();
+  if (action === 'import') return importFile.click();
+  if (action === 'export') { exportDialog.showModal(); return; }
   if (action === 'reset' && confirm('确定清除当前设备上的所有记录吗？')) { records = {}; settings = defaultSettings(); batchMode = false; batchDates = []; persist(); render('profile'); showToast('记录与周期设置已恢复'); return; }
   if (action === 'about') return alert('阶段预测基于最近一次经期开始日与平均周期估算。实际排卵日和各阶段长度会波动，不能用于避孕、诊断或替代专业医疗建议。');
   if (action === 'privacy') return showToast('本地隐私模式已开启');
@@ -267,6 +426,18 @@ form.addEventListener('click', event => {
   if (!button) return;
   const input = form.elements[button.dataset.counter];
   input.value = safeCount(safeCount(input.value) + Number(button.dataset.step));
+});
+importFile.addEventListener('change', () => { const file = importFile.files?.[0]; if (file) prepareImport(file); });
+document.querySelector('#closeImport').addEventListener('click', () => { pendingImport = null; importDialog.close(); });
+document.querySelector('#confirmImport').addEventListener('click', applyImport);
+document.querySelector('#closeExport').addEventListener('click', () => exportDialog.close());
+exportDialog.addEventListener('click', event => {
+  const button = event.target.closest('[data-export-format]'); if (!button) return;
+  const format = button.dataset.exportFormat;
+  exportDialog.close();
+  if (format === 'markdown') { downloadText(markdownReport(), `知期健康记录-${toKey(todayDate)}.md`, 'text/markdown;charset=utf-8'); showToast('Markdown 报告已导出'); }
+  if (format === 'pdf') printReport();
+  if (format === 'json') exportData();
 });
 cancelNoPeriod.addEventListener('click', () => noPeriodDialog.close());
 confirmNoPeriod.addEventListener('click', () => { noPeriodDialog.close(); commitQuickPeriod('no'); });

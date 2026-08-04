@@ -41,6 +41,25 @@
     <p>确认后会记录为“今天没有来”，之后仍可随时修改。</p>
     <div class="confirm-actions"><button id="cancelNoPeriod">再想想</button><button id="confirmNoPeriod" class="confirm">确认没有来</button></div>
   </dialog>
+  <input id="importFile" type="file" accept=".json,.xml,.pdf,application/json,text/xml,application/xml,application/pdf" hidden>
+  <dialog id="importDialog" class="backup-dialog">
+    <button class="dialog-close" id="closeImport" aria-label="关闭">×</button>
+    <div class="backup-icon">⇩</div><h2>确认导入</h2>
+    <p id="importFileName" class="backup-subtle"></p>
+    <div id="importSummary" class="import-summary"></div>
+    <p class="privacy-note">文件只在当前设备中读取，不会上传到网络。苹果 PDF 仅读取经期摘要，不读取姓名、生日。现有记录将保留，相同日期以导入内容更新。</p>
+    <button id="confirmImport" class="backup-primary">确认导入</button>
+  </dialog>
+  <dialog id="exportDialog" class="backup-dialog">
+    <button class="dialog-close" id="closeExport" aria-label="关闭">×</button>
+    <div class="backup-icon">⇧</div><h2>导出与保存</h2>
+    <p class="backup-subtle">选择适合手机保存或恢复数据的格式</p>
+    <div class="export-options">
+      <button data-export-format="markdown"><b>Markdown 报告</b><small>适合备忘录、笔记软件查看</small></button>
+      <button data-export-format="pdf"><b>PDF 报告</b><small>打开打印界面后选择“存储为 PDF”</small></button>
+      <button data-export-format="json"><b>JSON 完整备份</b><small>以后可重新导入本软件</small></button>
+    </div>
+  </dialog>
   <div id="toast" role="status">今天的记录已保存</div>
   <script src="app.js"></script>
 </body>
