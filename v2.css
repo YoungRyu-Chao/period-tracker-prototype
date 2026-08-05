@@ -277,6 +277,26 @@
 .confirm-actions button { height: 42px; border: 1px solid var(--line); border-radius: 14px; background: #fff; color: var(--muted); font-weight: 700; }
 .confirm-actions .confirm { border-color: var(--accent); background: var(--accent); color: #fff; }
 
+/* Optional readability mode, persisted per device. */
+.large-text .topline h1, .large-text .page-title { font-size: 32px; }
+.large-text .date, .large-text .subtle, .large-text .prediction { font-size: 15px; line-height: 1.55; }
+.large-text .day { font-size: 13px; }
+.large-text .day b { font-size: 17px; }
+.large-text .cycle-content small { font-size: 14px; }
+.large-text .cycle-content strong { font-size: 34px; }
+.large-text .cycle-content span, .large-text .primary { font-size: 17px; }
+.large-text .section-title { font-size: 21px; }
+.large-text .row-copy b, .large-text .profile-card h3, .large-text .phase-card b, .large-text .quick-period b { font-size: 17px; }
+.large-text .row-copy small, .large-text .profile-card p, .large-text .backup-reminder, .large-text .save-status { font-size: 13px; line-height: 1.55; }
+.large-text .tab { font-size: 12px; }
+.large-text .tab .icon { font-size: 22px; }
+.large-text .stat span, .large-text .calculation-note span, .large-text .phase-insight b, .large-text .monthly-row > b { font-size: 12px; }
+.large-text dialog, .large-text dialog button, .large-text dialog input, .large-text dialog textarea { font-size: 16px; }
+.large-text .sheet h2, .large-text .backup-dialog h2, .large-text .confirm-dialog h2 { font-size: 21px; }
+.large-text .field-help, .large-text .privacy-note, .large-text .backup-subtle, .large-text .confirm-dialog p { font-size: 14px; }
+.large-text .choice-row span, .large-text .chips span, .large-text .product-counter b { font-size: 15px; }
+.large-text .moods small, .large-text .product-counter small { font-size: 12px; }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     scroll-behavior: auto !important;
