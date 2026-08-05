@@ -1,7 +1,7 @@
-const CACHE = 'zhiqi-v6';
+const CACHE = 'zhiqi-v7';
 const CORE_SHELL = [
   './', './index.html', './styles.css', './v2.css', './app.js',
-  './manifest.webmanifest', './icons/app-icon-192.png', './icons/app-icon-512.png'
+  './manifest.json', './icons/app-icon-192.png', './icons/app-icon-512.png'
 ];
 
 self.addEventListener('install', event => {
