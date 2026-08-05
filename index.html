@@ -16,7 +16,6 @@
 </head>
 <body>
   <main class="phone" aria-label="知期经期记录应用原型">
-    <div class="statusbar"><span>9:41</span><span>● ◒</span></div>
     <section id="screen" class="screen"></section>
     <nav class="tabbar" aria-label="主导航">
       <button class="tab active" data-page="today" aria-label="今天"><span class="icon">⌂</span><span>今天</span></button>
@@ -92,6 +91,20 @@
   <dialog id="updateDialog" class="confirm-dialog">
     <div class="confirm-icon">↻</div><h2>发现新版本</h2><p>更新后会获得最新功能，已有记录不会丢失。</p>
     <div class="confirm-actions"><button id="updateLater">稍后</button><button id="updateNow" class="confirm">立即更新</button></div>
+  </dialog>
+  <dialog id="installHelpDialog" class="backup-dialog install-help-dialog">
+    <button class="dialog-close" id="closeInstallHelp" aria-label="关闭">×</button>
+    <h2>添加知期到手机桌面</h2>
+    <div class="install-guide">
+      <p><b>一加自带浏览器</b></p>
+      <ol>
+        <li>点击浏览器底部或右上角的菜单按钮。</li>
+        <li>选择“添加到桌面”“添加到主页”或“安装应用”。</li>
+        <li>确认添加后，从手机桌面打开知期。</li>
+      </ol>
+      <p class="privacy-note">如果菜单中没有这些选项，请用 Chrome 打开当前网址，再选择“添加到主屏幕”或“安装应用”。</p>
+    </div>
+    <button id="closeInstallHelpPrimary" class="backup-primary">我知道了</button>
   </dialog>
   <dialog id="exportDialog" class="backup-dialog">
     <button class="dialog-close" id="closeExport" aria-label="关闭">×</button>

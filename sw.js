@@ -1,4 +1,4 @@
-const CACHE = 'zhiqi-v3';
+const CACHE = 'zhiqi-v4';
 const APP_SHELL = [
   './', './index.html', './styles.css', './v2.css', './app.js',
   './manifest.webmanifest', './pdf.min.js', './pdf.worker.min.js',

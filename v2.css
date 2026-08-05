@@ -4,6 +4,12 @@
   font-family: inherit;
 }
 
+/* The real device already supplies its own status bar. */
+.screen { padding-top: 22px; }
+.install-guide { color: var(--ink); font-size: 14px; line-height: 1.7; }
+.install-guide ol { margin: 8px 0 18px; padding-left: 22px; }
+.install-guide li + li { margin-top: 8px; }
+
 .month button.predicted {
   border: 1.5px dashed var(--accent);
   background: transparent;

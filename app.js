@@ -17,6 +17,7 @@ const cycleSettingsForm = document.querySelector('#cycleSettingsForm');
 const reminderDialog = document.querySelector('#reminderDialog');
 const reminderForm = document.querySelector('#reminderForm');
 const updateDialog = document.querySelector('#updateDialog');
+const installHelpDialog = document.querySelector('#installHelpDialog');
 let pendingImport = null;
 let installPrompt = null;
 let waitingWorker = null;
@@ -266,7 +267,7 @@ function profile() {
     <div class="profile-card"><h3>双重本地保护</h3><p class="subtle">${Object.keys(records).length ? `已有 ${Object.keys(records).length} 天记录同时保存在主存储与自动快照。` : '记录将在当前设备进行双重保存，不需要注册账号。'}</p><span class="save-status">● 上次自动保存：${savedLabel}</span><p class="backup-reminder">建议每月下载一次 JSON 完整备份，换手机或清理浏览器后仍可恢复。</p><button class="mini-backup" data-action="export-json">下载 JSON 完整备份</button></div>
     <h2 class="section-title profile-section">周期设置</h2><div class="list">${row('◷','调整周期', `${settings.lastPeriodStart} · 典型 ${settings.cycleLength} 天 · 经期 ${settings.periodLength} 天`,'cycle-settings')}</div>
     <h2 class="section-title profile-section">数据管理</h2><div class="list">${row('⇩','导入备份','导入前预览新增、覆盖与冲突','import')}${row('↺','恢复自动快照','恢复最近一次自动保存的数据','restore-snapshot')}${row('↶','撤销最近一次导入','恢复到导入前的状态','undo-import')}${row('⇧','导出与保存','Markdown、PDF 或 JSON','export')}</div>
-    <h2 class="section-title profile-section">App 与提醒</h2><div class="pwa-brand"><img src="icons/app-icon-192.png" alt="知期 App 图标"><span><b>知期 App</b><small>可安装 · 可离线使用</small></span></div><div class="list">${installPrompt ? row('＋','安装到手机桌面','离线使用，打开更像 App','install-app') : row('✓','离线使用已准备', navigator.onLine ? '安装后可在无网络时继续记录' : '当前处于离线状态','offline-info')}${row('⌁','提醒设置', `${settings.periodReminder ? `经期前 ${settings.periodReminderDays} 天` : '经期提醒关闭'} · ${settings.recordReminder ? `${settings.recordReminderTime} 记录提醒` : '记录提醒关闭'}`,'reminder-settings')}</div>
+    <h2 class="section-title profile-section">App 与提醒</h2><div class="pwa-brand"><img src="icons/app-icon-192.png" alt="知期 App 图标"><span><b>知期 App</b><small>可安装 · 可离线使用</small></span></div><div class="list">${row('＋','安装到手机桌面', installPrompt ? '点击后直接安装，离线也能使用' : '查看一加浏览器与 Chrome 的安装步骤','install-app')}${row('⌁','提醒设置', `${settings.periodReminder ? `经期前 ${settings.periodReminderDays} 天` : '经期提醒关闭'} · ${settings.recordReminder ? `${settings.recordReminderTime} 记录提醒` : '记录提醒关闭'}`,'reminder-settings')}</div>
     <h2 class="section-title profile-section">其他</h2><div class="list">${row('↺','恢复演示数据','清除记录并恢复默认','reset')}${row('?','关于预测','了解计算方式与限制','about')}</div>
     <div class="insight"><p class="subtle">阶段和日期均为估算，不能用于诊断或替代专业医疗建议。</p></div>`;
 }
@@ -620,7 +621,11 @@ screen.addEventListener('click', event => {
   if (action === 'import') return importFile.click();
   if (action === 'cycle-settings') return openCycleSettings();
   if (action === 'reminder-settings') return openReminderSettings();
-  if (action === 'install-app' && installPrompt) { installPrompt.prompt(); installPrompt.userChoice.finally(() => { installPrompt = null; render('profile'); }); return; }
+  if (action === 'install-app') {
+    if (installPrompt) { installPrompt.prompt(); installPrompt.userChoice.finally(() => { installPrompt = null; render('profile'); }); }
+    else installHelpDialog.showModal();
+    return;
+  }
   if (action === 'offline-info') return showToast(navigator.onLine ? '离线功能已准备，可从浏览器菜单安装' : '当前可继续离线记录');
   if (action === 'restore-snapshot') return restoreSnapshot('latest', '恢复自动快照');
   if (action === 'undo-import') return restoreSnapshot('before-import', '撤销最近一次导入');
@@ -763,6 +768,8 @@ async function registerPwa() {
 }
 document.querySelector('#updateLater').addEventListener('click', () => updateDialog.close());
 document.querySelector('#updateNow').addEventListener('click', () => { waitingWorker?.postMessage('SKIP_WAITING'); updateDialog.close(); });
+document.querySelector('#closeInstallHelp').addEventListener('click', () => installHelpDialog.close());
+document.querySelector('#closeInstallHelpPrimary').addEventListener('click', () => installHelpDialog.close());
 async function bootstrap() {
   const recovered = await recoverIfNeeded();
   syncCycleSettingsFromHistory();
