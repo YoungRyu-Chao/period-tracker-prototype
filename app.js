@@ -21,6 +21,8 @@ const installHelpDialog = document.querySelector('#installHelpDialog');
 let pendingImport = null;
 let installPrompt = null;
 let waitingWorker = null;
+let pwaRegistration = null;
+let reloadingForUpdate = false;
 let trendLimit = 6;
 let formUsageTimes = { pads: [], tampons: [] };
 let recordApplyMode = 'single';
@@ -735,7 +737,7 @@ quickFlowDialog.addEventListener('click', event => {
 document.querySelector('#cancelQuickFlow').addEventListener('click', () => quickFlowDialog.close());
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') persist(); });
 window.addEventListener('beforeinstallprompt', event => { event.preventDefault(); installPrompt = event; if (activePage === 'profile') render('profile'); });
-window.addEventListener('online', () => { if (activePage === 'profile') render('profile'); showToast('网络已恢复'); });
+window.addEventListener('online', () => { pwaRegistration?.update().catch(() => {}); if (activePage === 'profile') render('profile'); showToast('网络已恢复，正在检查新版本'); });
 window.addEventListener('offline', () => { if (activePage === 'profile') render('profile'); showToast('已进入离线模式'); });
 
 async function notify(title, body, tag) {
@@ -759,15 +761,21 @@ function checkReminders() {
 }
 async function registerPwa() {
   if (!('serviceWorker' in navigator) || location.protocol === 'file:') return;
-  const registration = await navigator.serviceWorker.register('./sw.js');
-  if (registration.waiting) { waitingWorker = registration.waiting; updateDialog.showModal(); }
+  const registration = await navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' });
+  pwaRegistration = registration;
+  if (registration.waiting) registration.waiting.postMessage('SKIP_WAITING');
   registration.addEventListener('updatefound', () => {
     const worker = registration.installing;
     worker?.addEventListener('statechange', () => {
-      if (worker.state === 'installed' && navigator.serviceWorker.controller) { waitingWorker = worker; updateDialog.showModal(); }
+      if (worker.state === 'installed' && navigator.serviceWorker.controller) worker.postMessage('SKIP_WAITING');
     });
   });
-  navigator.serviceWorker.addEventListener('controllerchange', () => location.reload());
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (reloadingForUpdate) return;
+    reloadingForUpdate = true;
+    location.reload();
+  });
+  await registration.update().catch(() => {});
 }
 document.querySelector('#updateLater').addEventListener('click', () => updateDialog.close());
 document.querySelector('#updateNow').addEventListener('click', () => { waitingWorker?.postMessage('SKIP_WAITING'); updateDialog.close(); });
