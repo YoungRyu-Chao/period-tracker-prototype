@@ -212,15 +212,14 @@ function calendar() {
   const year = calendarCursor.getFullYear(), month = calendarCursor.getMonth();
   const firstDay = new Date(year, month, 1).getDay();
   const total = new Date(year, month + 1, 0).getDate();
-  const predictedStart = nextPeriodDate();
   const starts = periodStarts();
   const cells = Array.from({ length: firstDay }, () => '<span></span>');
   for (let day = 1; day <= total; day++) {
     const date = new Date(year, month, day, 12), key = toKey(date), record = records[key];
-    const predictedOffset = daysBetween(predictedStart, key);
     const phase = phaseInfo(key, starts);
     const isRecordedPeriod = record?.period === 'yes';
-    const classes = [isRecordedPeriod ? 'period' : '', !isRecordedPeriod && predictedOffset >= 0 && predictedOffset < settings.periodLength ? 'predicted' : '', key === selectedDate && !batchMode ? 'selected' : '', batchDates.includes(key) ? 'batch-selected' : '', !isRecordedPeriod ? `phase-${phase.id}` : ''].filter(Boolean).join(' ');
+    const isPredictedPeriod = !isRecordedPeriod && phase.id === 'period-phase';
+    const classes = [isRecordedPeriod ? 'period' : '', isPredictedPeriod ? 'predicted' : '', key === selectedDate && !batchMode ? 'selected' : '', batchDates.includes(key) ? 'batch-selected' : '', !isRecordedPeriod && !isPredictedPeriod ? `phase-${phase.id}` : ''].filter(Boolean).join(' ');
     cells.push(`<button class="${classes}" data-date="${key}" aria-label="${cnDate(date)}，${isRecordedPeriod ? `实际经期第 ${actualPeriodDay(key)} 天` : `预计${phase.name}`}${record ? '，已有记录' : ''}">${day}</button>`);
   }
   const selectedRecord = records[selectedDate];

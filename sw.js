@@ -1,4 +1,4 @@
-const CACHE = 'zhiqi-v8';
+const CACHE = 'zhiqi-v9';
 const CORE_SHELL = [
   './', './index.html', './styles.css', './v2.css', './app.js',
   './manifest.json', './icons/app-icon-192.png', './icons/app-icon-512.png'

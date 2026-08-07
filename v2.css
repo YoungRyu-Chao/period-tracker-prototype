@@ -15,9 +15,7 @@
   background: transparent;
 }
 
-.month button.period.predicted {
-  background: #e6dcf7;
-}
+.month button.predicted.selected { box-shadow: none; }
 
 .stats {
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -128,7 +126,7 @@
 .phase-legend span { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 10px; }
 .phase-legend .phase-shape { width: 8px; height: 8px; }
 .phase-legend .phase-shape.early-luteal { width: 0; height: 0; border-left-width: 4px; border-right-width: 4px; border-bottom-width: 8px; }
-.predicted-ring { width: 10px; height: 10px; border: 1.5px solid #ee83ae; border-radius: 50%; }
+.predicted-ring { width: 10px; height: 10px; border: 1.5px dashed var(--accent); border-radius: 50%; }
 
 .batch-panel {
   display: flex;
