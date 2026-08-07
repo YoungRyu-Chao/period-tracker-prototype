@@ -111,9 +111,25 @@ function cnDate(date, withWeek = false) {
   const base = `${date.getMonth() + 1}月${date.getDate()}日`;
   return withWeek ? `${base} · 周${'日一二三四五六'[date.getDay()]}` : base;
 }
-function cycleDay(key) {
-  const raw = daysBetween(settings.lastPeriodStart, key);
-  return ((raw % settings.cycleLength) + settings.cycleLength) % settings.cycleLength + 1;
+function periodStarts() {
+  return Object.keys(records).filter(key => records[key]?.period === 'yes' && records[offsetKey(fromKey(key), -1)]?.period !== 'yes').sort();
+}
+function cyclePosition(key, starts = periodStarts()) {
+  const previousStart = [...starts].reverse().find(start => start <= key);
+  if (!previousStart) {
+    const raw = daysBetween(settings.lastPeriodStart, key);
+    return { day: ((raw % settings.cycleLength) + settings.cycleLength) % settings.cycleLength + 1, start: settings.lastPeriodStart, actual: false };
+  }
+  const rawDay = daysBetween(previousStart, key) + 1;
+  const isFutureEstimate = key > toKey(todayDate);
+  return { day: isFutureEstimate ? ((rawDay - 1) % settings.cycleLength) + 1 : rawDay, start: previousStart, actual: !isFutureEstimate };
+}
+function cycleDay(key, starts) {
+  return cyclePosition(key, starts).day;
+}
+function actualPeriodDay(key) {
+  if (records[key]?.period !== 'yes') return 0;
+  return periodRange(key).indexOf(key) + 1;
 }
 function nextPeriodDate() {
   let next = fromKey(settings.lastPeriodStart);
@@ -134,14 +150,16 @@ function formatPredictionWindow(window) {
   return window.irregular ? `${cnDate(fromKey(window.start))}–${cnDate(fromKey(window.end))}` : cnDate(fromKey(window.start));
 }
 function relativeDays(key) { return daysBetween(toKey(todayDate), key); }
-function phaseInfo(key) {
-  const day = cycleDay(key);
+function phaseInfo(key, starts) {
+  const recordedDay = actualPeriodDay(key);
+  if (recordedDay) return { id: 'period-phase', name: '经期', detail: `实际第 ${recordedDay} 天`, day: recordedDay, actual: true };
+  const day = cycleDay(key, starts);
   const ovulationDay = Math.max(settings.periodLength + 2, settings.cycleLength - 14);
   const lateLutealStart = Math.max(ovulationDay + 2, settings.cycleLength - 6);
-  if (day <= settings.periodLength) return { id: 'period-phase', name: '经期', detail: `预计第 ${day} 天` };
-  if (day <= ovulationDay) return { id: 'follicular', name: '卵泡期', detail: `预计排卵日前 · 周期第 ${day} 天` };
-  if (day < lateLutealStart) return { id: 'early-luteal', name: '黄体前期', detail: `预计排卵后 · 周期第 ${day} 天` };
-  return { id: 'late-luteal', name: '黄体后期', detail: `预计经期前 · 周期第 ${day} 天` };
+  if (day <= settings.periodLength) return { id: 'period-phase', name: '经期', detail: `预计第 ${day} 天`, day, actual: false };
+  if (day <= ovulationDay) return { id: 'follicular', name: '卵泡期', detail: `预计排卵日前 · 周期第 ${day} 天`, day, actual: false };
+  if (day < lateLutealStart) return { id: 'early-luteal', name: '黄体前期', detail: `预计排卵后 · 周期第 ${day} 天`, day, actual: false };
+  return { id: 'late-luteal', name: '黄体后期', detail: `预计经期前 · 周期第 ${day} 天`, day, actual: false };
 }
 function showToast(message) {
   toast.textContent = message;
@@ -181,8 +199,8 @@ function today() {
   const productText = usageText(record);
   return `<div class="topline"><div><h1>今天</h1><div class="date">${cnDate(todayDate, true)}</div></div><button class="privacy" aria-label="隐私模式" data-action="privacy">◉</button></div>
     ${weekStrip()}
-    <div class="cycle"><div class="cycle-content"><small>预计${phase.name}</small><strong>第 ${cycleDay(todayKey)} 天</strong><span>${daysToNext >= 0 ? `预计 ${daysToNext} 天后` : '请更新经期日期'}</span></div></div>
-    <div class="phase-card"><div>${phaseShape(phase.id)}<div><b>预计${phase.name}</b><small>${phase.detail}</small></div></div><small class="estimate">仅为估算</small></div>
+    <div class="cycle"><div class="cycle-content"><small>${phase.actual ? phase.name : `预计${phase.name}`}</small><strong>第 ${phase.day} 天</strong><span>${daysToNext >= 0 ? `预计 ${daysToNext} 天后` : '请更新经期日期'}</span></div></div>
+    <div class="phase-card"><div>${phaseShape(phase.id)}<div><b>${phase.actual ? phase.name : `预计${phase.name}`}</b><small>${phase.detail}</small></div></div><small class="estimate">${phase.actual ? '已记录' : '仅为估算'}</small></div>
     ${phaseTrack(phase.id)}
     <div class="quick-period"><div><b>今天月经来了吗？</b><small>${record?.period ? '已记录，可随时修改' : '一秒完成快速记录'}</small></div><div class="quick-actions"><button data-action="quick-period" data-value="yes" class="${record?.period === 'yes' ? 'active' : ''}">来了</button><button data-action="quick-period" data-value="no" class="${record?.period === 'no' ? 'active' : ''}">没有</button></div></div>
     <button class="primary" data-action="record" data-date="${todayKey}">${record ? '补充详细记录' : '记录更多感受'}</button>
@@ -195,16 +213,18 @@ function calendar() {
   const firstDay = new Date(year, month, 1).getDay();
   const total = new Date(year, month + 1, 0).getDate();
   const predictedStart = nextPeriodDate();
+  const starts = periodStarts();
   const cells = Array.from({ length: firstDay }, () => '<span></span>');
   for (let day = 1; day <= total; day++) {
     const date = new Date(year, month, day, 12), key = toKey(date), record = records[key];
     const predictedOffset = daysBetween(predictedStart, key);
-    const phase = phaseInfo(key);
-    const classes = [record?.period === 'yes' ? 'period' : '', predictedOffset >= 0 && predictedOffset < settings.periodLength ? 'predicted' : '', key === selectedDate && !batchMode ? 'selected' : '', batchDates.includes(key) ? 'batch-selected' : '', `phase-${phase.id}`].filter(Boolean).join(' ');
-    cells.push(`<button class="${classes}" data-date="${key}" aria-label="${cnDate(date)}，预计${phase.name}${record ? '，已有记录' : ''}">${day}</button>`);
+    const phase = phaseInfo(key, starts);
+    const isRecordedPeriod = record?.period === 'yes';
+    const classes = [isRecordedPeriod ? 'period' : '', !isRecordedPeriod && predictedOffset >= 0 && predictedOffset < settings.periodLength ? 'predicted' : '', key === selectedDate && !batchMode ? 'selected' : '', batchDates.includes(key) ? 'batch-selected' : '', !isRecordedPeriod ? `phase-${phase.id}` : ''].filter(Boolean).join(' ');
+    cells.push(`<button class="${classes}" data-date="${key}" aria-label="${cnDate(date)}，${isRecordedPeriod ? `实际经期第 ${actualPeriodDay(key)} 天` : `预计${phase.name}`}${record ? '，已有记录' : ''}">${day}</button>`);
   }
   const selectedRecord = records[selectedDate];
-  const selectedPhase = phaseInfo(selectedDate);
+  const selectedPhase = phaseInfo(selectedDate, starts);
   const summary = selectedRecord ? [selectedRecord.period === 'yes' ? `经期·${flowName(selectedRecord.flow)}` : '非经期', usageText(selectedRecord, true), ...(selectedRecord.symptoms || []), selectedRecord.mood].filter(Boolean).join(' · ') : '尚未记录这一天';
   const batchPanel = batchMode ? `<div class="batch-panel"><span><b>已选 ${batchDates.length} 天</b><small>再次点击可取消</small></span><button data-action="batch-record" ${batchDates.length ? '' : 'disabled'}>批量记录</button></div>` : '';
   return `<div class="calendar-title"><div><h1 class="page-title">日历</h1><div class="subtle">${batchMode ? '点击多个日期进行批量记录' : '查看阶段预测或补充记录'}</div></div><button class="multi-toggle ${batchMode ? 'active' : ''}" data-action="toggle-batch">${batchMode ? '取消多选' : '多选日期'}</button></div>
@@ -212,7 +232,7 @@ function calendar() {
     <div class="month"><span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span>${cells.join('')}</div>
     <div class="phase-legend" aria-label="阶段图例"><span><i class="phase-shape period-phase"></i>经期</span><span><i class="predicted-ring"></i>预测经期</span><span>${phaseShape('follicular')}卵泡期</span><span>${phaseShape('early-luteal')}黄体前期</span><span>${phaseShape('late-luteal')}黄体后期</span></div>
     ${batchPanel}
-    ${batchMode ? '' : `<div class="insight"><h3>${cnDate(fromKey(selectedDate))} · 预计${selectedPhase.name}</h3><p class="subtle">周期第 ${cycleDay(selectedDate)} 天 · ${summary}</p><button class="primary" data-action="record" data-date="${selectedDate}">${selectedRecord ? '编辑记录' : '补充记录'}</button></div>`}`;
+    ${batchMode ? '' : `<div class="insight"><h3>${cnDate(fromKey(selectedDate))} · ${selectedPhase.actual ? `经期第 ${selectedPhase.day} 天` : `预计${selectedPhase.name}`}</h3><p class="subtle">${selectedPhase.actual ? `本次经期第 ${selectedPhase.day} 天` : `周期第 ${selectedPhase.day} 天`} · ${summary}</p><button class="primary" data-action="record" data-date="${selectedDate}">${selectedRecord ? '编辑记录' : '补充记录'}</button></div>`}`;
 }
 
 function trends() {
@@ -368,7 +388,8 @@ function openRecord(dateKey, targets) {
   form.reset();
   document.querySelector('#recordTitle').textContent = isBatch ? `批量记录 ${recordTargets.length} 天` : '记录这一天';
   document.querySelector('#recordDate').textContent = isBatch ? `${cnDate(fromKey(recordTargets[0]))} 至 ${cnDate(fromKey(recordTargets.at(-1)))}` : cnDate(fromKey(selectedDate));
-  document.querySelector('#recordCycleDay').textContent = isBatch ? '所选日期将使用相同记录' : `预计${phaseInfo(selectedDate).name} · 周期第 ${cycleDay(selectedDate)} 天`;
+  const selectedPhase = phaseInfo(selectedDate);
+  document.querySelector('#recordCycleDay').textContent = isBatch ? '所选日期将按各自经期分段计算' : selectedPhase.actual ? `实际经期第 ${selectedPhase.day} 天` : `预计${selectedPhase.name} · 周期第 ${selectedPhase.day} 天`;
   form.elements.period.value = record.period || 'no';
   if (record.flow) form.elements.flow.value = record.flow;
   form.elements.pads.value = safeCount(record.pads);
@@ -387,10 +408,9 @@ function openRecord(dateKey, targets) {
 }
 
 function updateLastPeriodStart(targets) {
-  const candidates = targets.filter(key => key <= toKey(todayDate) && records[key]?.period === 'yes').sort();
-  if (!candidates.length) return;
-  const starts = candidates.filter(key => records[offsetKey(fromKey(key), -1)]?.period !== 'yes');
-  settings.lastPeriodStart = (starts[0] || candidates[0]);
+  if (!targets.some(key => key <= toKey(todayDate) && records[key]?.period === 'yes')) return;
+  const starts = periodStarts().filter(key => key <= toKey(todayDate));
+  if (starts.length) settings.lastPeriodStart = starts.at(-1);
 }
 
 function saveRecord() {

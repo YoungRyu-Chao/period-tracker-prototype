@@ -102,6 +102,7 @@
 .calendar-title { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .multi-toggle { padding: 8px 11px; color: var(--accent-dark); }
 .month button { position: relative; }
+.month button.period { background: #ee83ae; color: #fff; font-weight: 700; }
 .month button[class*="phase-"]:not(.period):not(.predicted)::after {
   content: "";
   position: absolute;
